@@ -9,6 +9,9 @@ export const TIPOS = [
       ancho: 900,
       alto: 2100,
       marco_perfil: "40x40x1.6",
+      travesano_perfil: "40x40x1.6",
+      tirante_perfil: "40x40x1.6",
+      refuerzo_perfil: "40x40x1.6",
       barrote: "20x20x1.2",
       luz_mm: 110,
       travesanos: 1,
@@ -25,6 +28,9 @@ export const TIPOS = [
       ancho: 1200,
       alto: 1000,
       marco_perfil: "30x30x1.2",
+      travesano_perfil: "30x30x1.2",
+      tirante_perfil: "30x30x1.2",
+      refuerzo_perfil: "30x30x1.2",
       barrote: "12_redondo",
       luz_mm: 100,
       travesanos: 0,
@@ -41,6 +47,9 @@ export const TIPOS = [
       ancho: 3000,
       alto: 2000,
       marco_perfil: "50x50x1.6",
+      travesano_perfil: "50x50x1.6",
+      tirante_perfil: "50x50x1.6",
+      refuerzo_perfil: "50x50x1.6",
       barrote: "20x20x1.2",
       luz_mm: 110,
       travesanos: 2,
@@ -57,6 +66,9 @@ export const TIPOS = [
       ancho: 2400,
       alto: 2000,
       marco_perfil: "40x40x1.6",
+      travesano_perfil: "40x40x1.6",
+      tirante_perfil: "40x40x1.6",
+      refuerzo_perfil: "40x40x1.6",
       barrote: "20x20x1.2",
       luz_mm: 110,
       travesanos: 1,
@@ -88,6 +100,11 @@ export const BARROTES = [
   { id: "10_redondo", nombre: "hierro redondo del 10" },
   { id: "12_redondo", nombre: "hierro redondo del 12" },
   { id: "14_redondo", nombre: "hierro redondo del 14" },
+];
+
+export const ESTRUCTURALES = [
+  ...BARROTES.filter((b) => !b.id.endsWith("_redondo")),
+  ...MARCOS,
 ];
 
 const LIMITS = {
@@ -142,8 +159,15 @@ export function defaultSpec(tipoId) {
 export function validateSpec(input = {}) {
   const tipo = tipoById(input.tipo);
   const base = { ...tipo.defaults, ...input, tipo: tipo.id };
-  const marco = parsePerfil(base.marco_perfil) ? base.marco_perfil : tipo.defaults.marco_perfil;
-  const barrote = parsePerfil(base.barrote) ? base.barrote : tipo.defaults.barrote;
+  const idsMarco = new Set(MARCOS.map((m) => m.id));
+  const idsEstructural = new Set(ESTRUCTURALES.map((m) => m.id));
+  const idsBarrote = new Set(BARROTES.map((b) => b.id));
+  const marco = idsMarco.has(base.marco_perfil) ? base.marco_perfil : tipo.defaults.marco_perfil;
+  const pieza = (value, fallback) => (idsEstructural.has(value) ? value : fallback);
+  const travesano_perfil = pieza(base.travesano_perfil, marco);
+  const tirante_perfil = pieza(base.tirante_perfil, marco);
+  const refuerzo_perfil = pieza(base.refuerzo_perfil, marco);
+  const barrote = idsBarrote.has(base.barrote) ? base.barrote : tipo.defaults.barrote;
   const estilo = ESTILOS.some((e) => e.id === base.estilo)
     ? base.estilo
     : "barrotes_verticales";
@@ -157,6 +181,9 @@ export function validateSpec(input = {}) {
     ancho: clamp(Math.round(num(base.ancho, tipo.defaults.ancho)), ...LIMITS.ancho),
     alto: clamp(Math.round(num(base.alto, tipo.defaults.alto)), ...LIMITS.alto),
     marco_perfil: marco,
+    travesano_perfil,
+    tirante_perfil,
+    refuerzo_perfil,
     barrote,
     luz_mm: clamp(Math.round(num(base.luz_mm, tipo.defaults.luz_mm)), ...LIMITS.luz_mm),
     travesanos: clamp(Math.round(num(base.travesanos, tipo.defaults.travesanos)), ...LIMITS.travesanos),
@@ -176,6 +203,9 @@ export function applyPatch(spec, patch = {}) {
     if (!patch.ancho) next.ancho = tipo.defaults.ancho;
     if (!patch.alto) next.alto = tipo.defaults.alto;
     if (!patch.marco_perfil) next.marco_perfil = tipo.defaults.marco_perfil;
+    if (!patch.travesano_perfil) next.travesano_perfil = tipo.defaults.travesano_perfil;
+    if (!patch.tirante_perfil) next.tirante_perfil = tipo.defaults.tirante_perfil;
+    if (!patch.refuerzo_perfil) next.refuerzo_perfil = tipo.defaults.refuerzo_perfil;
     if (!patch.barrote) next.barrote = tipo.defaults.barrote;
   }
   return validateSpec(next);
@@ -186,6 +216,7 @@ export function getCatalog() {
     tipos: TIPOS,
     estilos: ESTILOS,
     marcos: MARCOS,
+    estructurales: ESTRUCTURALES,
     barrotes: BARROTES,
     limits: {
       ancho_mm: LIMITS.ancho,

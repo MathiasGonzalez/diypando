@@ -173,8 +173,12 @@ function addTirante(parts, joints, opts) {
   }
 }
 
+function perfilPieza(spec, key) {
+  return parsePerfil(spec[key]) || parsePerfil(spec.marco_perfil);
+}
+
 function addHingeTirante(parts, joints, spec, originX, leafW, suffix, hingeSide, mw, md, hasBottom) {
-  const marco = parsePerfil(spec.marco_perfil);
+  const tirante = perfilPieza(spec, "tirante_perfil");
   const z = md / 2;
   const y0 = hasBottom ? mw : 0;
   const y1 = spec.alto - mw;
@@ -186,7 +190,7 @@ function addHingeTirante(parts, joints, spec, originX, leafW, suffix, hingeSide,
   if (hasBottom) weldTo.push(`umbral${suffix}`);
   addTirante(parts, joints, {
     id: `tirante${suffix}`,
-    profile: marco,
+    profile: tirante,
     from,
     to,
     weldTo,
@@ -195,7 +199,8 @@ function addHingeTirante(parts, joints, spec, originX, leafW, suffix, hingeSide,
 }
 
 function addCorredizoArriostrado(parts, joints, spec, mw, md) {
-  const marco = parsePerfil(spec.marco_perfil);
+  const parante = perfilPieza(spec, "refuerzo_perfil");
+  const tirante = perfilPieza(spec, "tirante_perfil");
   const z = md / 2;
   const n = paneCount(spec.ancho, spec.alto);
   const paneW = spec.ancho / n;
@@ -213,7 +218,7 @@ function addCorredizoArriostrado(parts, joints, spec, mw, md) {
     addTube(parts, joints, {
       id,
       role: "refuerzo",
-      profile: marco,
+      profile: parante,
       from: [paneW * i, y0, z],
       to: [paneW * i, y1, z],
       group: "marco",
@@ -227,7 +232,7 @@ function addCorredizoArriostrado(parts, joints, spec, mw, md) {
     const x1 = i === n - 1 ? spec.ancho - mw : paneW * (i + 1);
     addTirante(parts, joints, {
       id: `tirante-${i + 1}`,
-      profile: marco,
+      profile: tirante,
       from: [x0, y0, z],
       to: [x1, y1, z],
       weldTo: ["umbral", "travesano-sup", verticalId(i), verticalId(i + 1)],
@@ -240,12 +245,12 @@ function addCorredizoArriostrado(parts, joints, spec, mw, md) {
 
 function addRejaParante(parts, joints, spec, mw, md) {
   if (spec.ancho <= REJA_PARANTE_MM) return { panos: 0, parantes: 0, tirantes: 0 };
-  const marco = parsePerfil(spec.marco_perfil);
+  const parante = perfilPieza(spec, "refuerzo_perfil");
   const z = md / 2;
   addTube(parts, joints, {
     id: "refuerzo-1",
     role: "refuerzo",
-    profile: marco,
+    profile: parante,
     from: [spec.ancho / 2, mw, z],
     to: [spec.ancho / 2, spec.alto - mw, z],
     group: "marco",
@@ -265,6 +270,7 @@ function leafGeometry(spec, originX, leafW, suffix, hingeSide) {
   const parts = [];
   const joints = [];
   const marco = parsePerfil(spec.marco_perfil);
+  const trav = perfilPieza(spec, "travesano_perfil");
   const bar = parsePerfil(spec.barrote);
   const mw = marco.w;
   const md = marco.d;
@@ -331,7 +337,7 @@ function leafGeometry(spec, originX, leafW, suffix, hingeSide) {
     addTube(parts, joints, {
       id,
       role: "travesano",
-      profile: marco,
+      profile: trav,
       from: [innerX0, y, z],
       to: [innerX1, y, z],
       group: "marco",

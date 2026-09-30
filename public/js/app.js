@@ -106,6 +106,9 @@ function specFromForm() {
     ancho: Number(form.ancho.value),
     alto: Number(form.alto.value),
     marco_perfil: form.marco_perfil.value,
+    travesano_perfil: form.travesano_perfil.value,
+    tirante_perfil: form.tirante_perfil.value,
+    refuerzo_perfil: form.refuerzo_perfil.value,
     barrote: form.barrote.value,
     luz_mm: Number(form.luz_mm.value),
     travesanos: Number(form.travesanos.value),
@@ -151,6 +154,9 @@ function syncForm() {
   $("ancho").value = s.ancho;
   $("alto").value = s.alto;
   $("marco_perfil").value = s.marco_perfil;
+  $("travesano_perfil").value = s.travesano_perfil;
+  $("tirante_perfil").value = s.tirante_perfil;
+  $("refuerzo_perfil").value = s.refuerzo_perfil;
   $("barrote").value = s.barrote;
   $("luz_mm").value = s.luz_mm;
   $("travesanos").value = s.travesanos;
@@ -188,18 +194,29 @@ function liConFoto(html, texto) {
   return `<li class="con-foto"><img src="${foto.src}" alt="${foto.alt}"><span>${html}</span></li>`;
 }
 
+function nombrePerfil(lista, id) {
+  return lista?.find((p) => p.id === id)?.nombre || "";
+}
+
 function renderFotosMaterial(spec) {
   const box = $("fotos-material");
-  const marco = state.catalog.marcos.find((p) => p.id === spec.marco_perfil);
-  const barrote = state.catalog.barrotes.find((p) => p.id === spec.barrote);
-  const cards = [
-    { nombre: marco?.nombre || "Caño del marco", foto: fotoDe(marco?.nombre || "caño") },
-  ];
-  const fotoBarrote = fotoDe(barrote?.nombre || "");
-  if (fotoBarrote && fotoBarrote.src !== cards[0].foto?.src) {
-    cards.push({ nombre: barrote.nombre, foto: fotoBarrote });
-  } else if (barrote && fotoBarrote) {
-    cards[0].nombre = `${marco.nombre} · barrotes del mismo tipo de caño`;
+  const nombres = [
+    nombrePerfil(state.catalog.marcos, spec.marco_perfil),
+    nombrePerfil(state.catalog.estructurales, spec.travesano_perfil),
+    nombrePerfil(state.catalog.estructurales, spec.tirante_perfil),
+    nombrePerfil(state.catalog.estructurales, spec.refuerzo_perfil),
+    nombrePerfil(state.catalog.barrotes, spec.barrote),
+  ].filter(Boolean);
+  const cards = [];
+  for (const nombre of nombres) {
+    const foto = fotoDe(nombre);
+    if (!foto) continue;
+    const previa = cards.find((c) => c.foto.src === foto.src);
+    if (previa) {
+      if (!previa.nombre.includes(nombre)) previa.nombre = `${previa.nombre} · ${nombre}`;
+    } else {
+      cards.push({ nombre, foto });
+    }
   }
   box.replaceChildren(
     ...cards.filter((c) => c.foto).map((c) => {
@@ -448,6 +465,9 @@ async function boot() {
   state.catalog = await res.json();
   fillSelect($("estilo"), state.catalog.estilos);
   fillSelect($("marco_perfil"), state.catalog.marcos);
+  fillSelect($("travesano_perfil"), state.catalog.estructurales);
+  fillSelect($("tirante_perfil"), state.catalog.estructurales);
+  fillSelect($("refuerzo_perfil"), state.catalog.estructurales);
   fillSelect($("barrote"), state.catalog.barrotes);
   state.spec = state.catalog.default_spec;
   syncForm();

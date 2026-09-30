@@ -1,4 +1,4 @@
-import { applyPatch, getCatalog, TIPOS, ESTILOS, MARCOS, BARROTES } from "./catalog.js";
+import { applyPatch, getCatalog, TIPOS, ESTILOS, MARCOS, BARROTES, ESTRUCTURALES } from "./catalog.js";
 import { runDesign } from "./design.js";
 
 const MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
@@ -22,6 +22,21 @@ const TOOLS = [
         ancho: { type: "number", description: "Ancho en milímetros" },
         alto: { type: "number", description: "Alto en milímetros" },
         marco_perfil: { type: "string", enum: MARCOS.map((m) => m.id) },
+        travesano_perfil: {
+          type: "string",
+          enum: ESTRUCTURALES.map((m) => m.id),
+          description: "Caño de los travesaños intermedios",
+        },
+        tirante_perfil: {
+          type: "string",
+          enum: ESTRUCTURALES.map((m) => m.id),
+          description: "Caño de los tirantes",
+        },
+        refuerzo_perfil: {
+          type: "string",
+          enum: ESTRUCTURALES.map((m) => m.id),
+          description: "Caño de los parantes",
+        },
         barrote: { type: "string", enum: BARROTES.map((b) => b.id) },
         luz_mm: { type: "number", description: "Luz entre barrotes, en mm" },
         travesanos: { type: "integer" },
@@ -43,6 +58,7 @@ Si solo pregunta, contestá con la lista para pedir.
 
 Tipos: ${TIPOS.map((t) => t.id).join(", ")}
 Caños de marco: ${MARCOS.map((m) => m.id).join(", ")}
+Caños de travesaños, tirantes y parantes: ${ESTRUCTURALES.map((m) => m.id).join(", ")}
 Barrotes: ${BARROTES.map((b) => b.id).join(", ")}
 
 Diseño actual (JSON): ${JSON.stringify(spec)}
@@ -104,6 +120,26 @@ function parseJsonPatch(text) {
   return null;
 }
 
+function perfilEstructural(fragmento) {
+  const opciones = [
+    [/80\s*x\s*40/, "80x40x1.6"],
+    [/50\s*x\s*50/, "50x50x1.6"],
+    [/40\s*x\s*20/, "40x20x1.6"],
+    [/40\s*x\s*40/, "40x40x1.6"],
+    [/30\s*x\s*30/, "30x30x1.2"],
+    [/25\s*x\s*25/, "25x25x1.2"],
+    [/20\s*x\s*20/, "20x20x1.2"],
+    [/16\s*x\s*16/, "16x16x1.2"],
+  ];
+  let elegido = null;
+  for (const [re, id] of opciones) {
+    const m = fragmento.match(re);
+    if (!m) continue;
+    if (!elegido || m.index < elegido.index) elegido = { index: m.index, id };
+  }
+  return elegido?.id || null;
+}
+
 export function localPatchFromText(text) {
   const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const patch = {};
@@ -117,27 +153,43 @@ export function localPatchFromText(text) {
   else if (/\bmixto\b/.test(t)) patch.estilo = "mixto";
   else if (/vertical/.test(t)) patch.estilo = "barrotes_verticales";
 
-  if (/redondo(?:\s+del)?\s*14|hierro del 14|ø\s*14|o14/.test(t)) patch.barrote = "14_redondo";
-  else if (/redondo(?:\s+del)?\s*12|hierro del 12|ø\s*12|o12/.test(t)) patch.barrote = "12_redondo";
-  else if (/redondo(?:\s+del)?\s*10|hierro del 10|ø\s*10|o10/.test(t)) patch.barrote = "10_redondo";
-  else if (/25\s*x\s*25/.test(t)) patch.barrote = "25x25x1.2";
-  else if (/16\s*x\s*16/.test(t)) patch.barrote = "16x16x1.2";
-  else if (/20\s*x\s*20/.test(t)) patch.barrote = "20x20x1.2";
+  let resto = t;
+  const nombrados = [
+    [/travesan\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "travesano_perfil"],
+    [/tirante\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "tirante_perfil"],
+    [/parante\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "refuerzo_perfil"],
+  ];
+  for (const [re, key] of nombrados) {
+    const frase = resto.match(re);
+    const id = frase && perfilEstructural(frase[0]);
+    if (!id) continue;
+    patch[key] = id;
+    resto = resto.replace(frase[0], " ");
+  }
 
-  if (/80\s*x\s*40/.test(t)) patch.marco_perfil = "80x40x1.6";
-  else if (/50\s*x\s*50/.test(t)) patch.marco_perfil = "50x50x1.6";
-  else if (/40\s*x\s*20/.test(t)) patch.marco_perfil = "40x20x1.6";
-  else if (/30\s*x\s*30/.test(t)) patch.marco_perfil = "30x30x1.2";
-  else if (/40\s*x\s*40/.test(t)) patch.marco_perfil = "40x40x1.6";
+  if (/redondo(?:\s+del)?\s*14|hierro del 14|ø\s*14|o14/.test(resto)) patch.barrote = "14_redondo";
+  else if (/redondo(?:\s+del)?\s*12|hierro del 12|ø\s*12|o12/.test(resto)) patch.barrote = "12_redondo";
+  else if (/redondo(?:\s+del)?\s*10|hierro del 10|ø\s*10|o10/.test(resto)) patch.barrote = "10_redondo";
+  else if (/25\s*x\s*25/.test(resto)) patch.barrote = "25x25x1.2";
+  else if (/16\s*x\s*16/.test(resto)) patch.barrote = "16x16x1.2";
+  else if (/20\s*x\s*20/.test(resto)) patch.barrote = "20x20x1.2";
+
+  if (/80\s*x\s*40/.test(resto)) patch.marco_perfil = "80x40x1.6";
+  else if (/50\s*x\s*50/.test(resto)) patch.marco_perfil = "50x50x1.6";
+  else if (/40\s*x\s*20/.test(resto)) patch.marco_perfil = "40x20x1.6";
+  else if (/30\s*x\s*30/.test(resto)) patch.marco_perfil = "30x30x1.2";
+  else if (/40\s*x\s*40/.test(resto)) patch.marco_perfil = "40x40x1.6";
 
   const luzCm = t.match(/luz\s*(?:de\s*)?(\d+(?:[.,]\d+)?)\s*cm/);
   const luzMm = t.match(/luz\s*(?:de\s*)?(\d+)\s*mm/);
   if (luzCm) patch.luz_mm = Math.round(Number(luzCm[1].replace(",", ".")) * 10);
   else if (luzMm) patch.luz_mm = Number(luzMm[1]);
 
-  const metros = t.match(/(\d+(?:[.,]\d+)?)\s*m(?:ts|etros)?\s*(?:x|por)\s*(\d+(?:[.,]\d+)?)\s*m/);
-  const mmPair = t.match(/(\d{3,4})\s*(?:x|por)\s*(\d{3,4})/);
-  const cmPair = t.match(/(\d{2,3})\s*(?:x|por)\s*(\d{2,3})(?!\d)/);
+  resto = resto.replace(/\b(?:16|20|25|30|40|50|80)\s*x\s*(?:16|20|25|30|40|50)\b/g, " ");
+
+  const metros = resto.match(/(\d+(?:[.,]\d+)?)\s*m(?:ts|etros)?\s*(?:x|por)\s*(\d+(?:[.,]\d+)?)\s*m/);
+  const mmPair = resto.match(/(\d{3,4})\s*(?:x|por)\s*(\d{3,4})/);
+  const cmPair = resto.match(/(\d{2,3})\s*(?:x|por)\s*(\d{2,3})(?!\d)/);
   if (metros) {
     patch.ancho = Math.round(Number(metros[1].replace(",", ".")) * 1000);
     patch.alto = Math.round(Number(metros[2].replace(",", ".")) * 1000);
