@@ -45,19 +45,19 @@
             </label>
           </div>
           <label>
-            Caño del marco
+            Material del marco
             <select name="marco_perfil" id="marco_perfil"></select>
           </label>
           <label>
-            Caño de los travesaños
+            Material de los travesaños
             <select name="travesano_perfil" id="travesano_perfil"></select>
           </label>
           <label>
-            Caño de los tirantes
+            Material de los tirantes
             <select name="tirante_perfil" id="tirante_perfil"></select>
           </label>
           <label>
-            Caño de los parantes
+            Material de los parantes
             <select name="refuerzo_perfil" id="refuerzo_perfil"></select>
           </label>
           <label>
@@ -89,13 +89,36 @@
               Travesaño de abajo
             </label>
           </div>
+          <div id="opciones-corredizo" class="opciones-tipo is-hidden">
+            <label>
+              Soporte
+              <select name="soporte" id="soporte"></select>
+            </label>
+            <label>
+              Rueda
+              <select name="rueda" id="rueda"></select>
+            </label>
+            <label>
+              Cerradura
+              <select name="cerradura" id="cerradura"></select>
+            </label>
+          </div>
         </form>
       </section>
 
       <section class="panel viewer" aria-label="Diagramas">
+        <div id="precio" class="precio">
+          <div class="precio-head">
+            <span>Precio estimado de materiales</span>
+            <strong id="precio-valor">—</strong>
+          </div>
+          <p id="precio-detalle" class="fine"></p>
+          <p id="precio-nota" class="fine"></p>
+        </div>
         <div class="tabs">
           <button type="button" class="tab is-on" data-view="3d" aria-pressed="true">Vista 3D</button>
           <button type="button" class="tab" data-view="2d" aria-pressed="false">Plano 2D</button>
+          <button type="button" class="tab" data-view="pedido" aria-pressed="false">Para pedir</button>
         </div>
         <aside id="pieza" class="pieza is-hidden" aria-live="polite">
           <div class="pieza-head">
@@ -115,8 +138,29 @@
         </div>
         <div id="weld-bar" class="weld-bar">
           <div class="weld-actions">
+            <button type="button" id="mode-ensamble" class="tab" data-mode="ensamble" aria-pressed="false">Ensamble paso a paso</button>
             <button type="button" id="mode-soldar" class="tab is-on" data-mode="soldar" aria-pressed="true">Soldadura</button>
             <button type="button" id="mode-resist" class="tab" data-mode="resistencia" aria-pressed="false">Resistencia</button>
+          </div>
+          <div id="asm-controls" class="weld-actions is-hidden">
+            <button type="button" id="asm-play">Reproducir</button>
+            <button type="button" id="asm-pause">Pausa</button>
+            <button type="button" id="asm-prev" aria-label="Paso anterior">◀ Anterior</button>
+            <button type="button" id="asm-next" aria-label="Paso siguiente">Siguiente ▶</button>
+            <button type="button" id="asm-restart">Desde cero</button>
+            <button type="button" id="asm-finish">Ver armado completo</button>
+            <label>
+              Velocidad
+              <select id="asm-speed">
+                <option value="lenta">Lenta</option>
+                <option value="normal" selected>Normal</option>
+                <option value="rapida">Rápida</option>
+              </select>
+            </label>
+            <label class="asm-seek">
+              Progreso
+              <input id="asm-progress" type="range" min="0" max="1000" value="0" />
+            </label>
           </div>
           <div id="weld-controls" class="weld-actions">
             <button type="button" id="weld-play">Reproducir</button>
@@ -144,44 +188,43 @@
           <p id="weld-label" class="weld-label">Soldaduras en orden de taller</p>
         </div>
         <div id="view-2d" class="stage is-hidden"></div>
+        <div id="view-pedido" class="stage pedido-view is-hidden" aria-label="Lista para pedir y consulta">
+          <h2>Para pedir</h2>
+          <p class="aviso" id="aviso"></p>
+          <div id="resumen" class="resumen"></div>
+          <h3>Casa de hierros</h3>
+          <p class="fine">Se vende de 6 m. No pidas la reja cortada: el corte fino lo hace el taller.</p>
+          <ul id="pedido-hierros" class="pedido"></ul>
+          <details class="cortes-taller">
+            <summary>Planilla de cortes (taller)</summary>
+            <div id="cortes" class="table-wrap"></div>
+          </details>
+          <h3>Electrodos</h3>
+          <div id="electrodos" class="electro"></div>
+          <h3>Ferretería</h3>
+          <ul id="discos" class="pedido"></ul>
+          <ul id="herrajes" class="herrajes"></ul>
+          <h3>Pintura</h3>
+          <ul id="pintura" class="herrajes"></ul>
+
+          <h2>Paso a paso</h2>
+          <ol id="pasos" class="pasos"></ol>
+
+          <h2>Consulta al taller</h2>
+          <div id="chat-log" class="chat-log"></div>
+          <form id="chat-form" class="chat-form">
+            <input
+              id="chat-input"
+              type="text"
+              maxlength="500"
+              placeholder="Ej: pasala a redondo del 12 y luz de 10 cm"
+              autocomplete="off"
+            />
+            <button type="submit">Enviar</button>
+          </form>
+          <p class="fine" id="chat-source"></p>
+        </div>
         <p id="status" class="status">Cargando…</p>
-      </section>
-
-      <section class="panel data" aria-label="Lista para pedir y consulta">
-        <h2>Para pedir</h2>
-        <p class="aviso" id="aviso"></p>
-        <div id="resumen" class="resumen"></div>
-        <h3>Casa de hierros</h3>
-        <p class="fine">Se vende de 6 m. No pidas la reja cortada: el corte fino lo hace el taller.</p>
-        <ul id="pedido-hierros" class="pedido"></ul>
-        <details class="cortes-taller">
-          <summary>Planilla de cortes (taller)</summary>
-          <div id="cortes" class="table-wrap"></div>
-        </details>
-        <h3>Electrodos</h3>
-        <div id="electrodos" class="electro"></div>
-        <h3>Ferretería</h3>
-        <ul id="discos" class="pedido"></ul>
-        <ul id="herrajes" class="herrajes"></ul>
-        <h3>Pintura</h3>
-        <ul id="pintura" class="herrajes"></ul>
-
-        <h2>Paso a paso</h2>
-        <ol id="pasos" class="pasos"></ol>
-
-        <h2>Consulta al taller</h2>
-        <div id="chat-log" class="chat-log"></div>
-        <form id="chat-form" class="chat-form">
-          <input
-            id="chat-input"
-            type="text"
-            maxlength="500"
-            placeholder="Ej: pasala a redondo del 12 y luz de 10 cm"
-            autocomplete="off"
-          />
-          <button type="submit">Enviar</button>
-        </form>
-        <p class="fine" id="chat-source"></p>
       </section>
     </main>
     <script type="module" src="/js/app.js"></script>

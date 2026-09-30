@@ -1,6 +1,7 @@
-import { parsePerfil, tipoById } from "./catalog.js";
+import { isHardware, parsePerfil, tipoById } from "./catalog.js";
 import { uyEspesor } from "./format.js";
 import { discosAmoladora } from "./pasos.js";
+import { estimarPrecio } from "./precios.js";
 
 const STEEL = 7850;
 const STOCK = 6000;
@@ -8,9 +9,10 @@ const KERF = 3;
 const FILLET_KG_PER_M = 0.05;
 
 function sectionAreaMm2(profile) {
-  if (profile.shape === "round") {
-    return Math.PI * (profile.w / 2) ** 2;
-  }
+  if (profile.shape === "round") return Math.PI * (profile.w / 2) ** 2;
+  if (profile.shape === "cable") return Math.PI * (profile.w / 2) ** 2 * 0.45;
+  if (profile.shape === "flat") return profile.w * profile.t;
+  if (profile.shape === "angle") return profile.t * (profile.w + profile.d - profile.t);
   const { w, d, t } = profile;
   const innerW = Math.max(0, w - 2 * t);
   const innerD = Math.max(0, d - 2 * t);
@@ -18,8 +20,18 @@ function sectionAreaMm2(profile) {
 }
 
 function perimeterMm(profile) {
-  if (profile.shape === "round") return Math.PI * profile.w;
+  if (profile.shape === "round" || profile.shape === "cable") return Math.PI * profile.w;
+  if (profile.shape === "flat") return 2 * (profile.w + profile.t);
+  if (profile.shape === "angle") return 2 * (profile.w + profile.d);
   return 2 * (profile.w + profile.d);
+}
+
+function unidadBarra(shape, n) {
+  const uno = n === 1;
+  if (shape === "round") return uno ? "barra de 6 m" : "barras de 6 m";
+  if (shape === "flat") return uno ? "planchuela de 6 m" : "planchuelas de 6 m";
+  if (shape === "angle") return uno ? "ángulo de 6 m" : "ángulos de 6 m";
+  return uno ? "caño de 6 m" : "caños de 6 m";
 }
 
 function packCuts(lengthsMm) {
@@ -49,12 +61,7 @@ function herrajesFor(spec) {
     ];
   }
   if (tipo === "porton_corredizo") {
-    return [
-      { item: "ruedas para portón corredizo", cantidad: 2, unidad: "unid." },
-      { item: "riel / guía inferior", cantidad: 1, unidad: "unid." },
-      { item: "tope de portón", cantidad: 1, unidad: "unid." },
-      { item: "cerradura de portón", cantidad: 1, unidad: "unid." },
-    ];
+    return herrajesCorredizo(spec);
   }
   if (tipo === "porton_dos_hojas") {
     return [
@@ -70,12 +77,56 @@ function herrajesFor(spec) {
   ];
 }
 
+function herrajesCorredizo(spec) {
+  const items = [];
+  if (spec.soporte === "granero") {
+    items.push({
+      item:
+        spec.rueda === "carrito_doble"
+          ? "carritos de dos rodillos (tipo granero)"
+          : "carritos de un rodillo (tipo granero)",
+      cantidad: 2,
+      unidad: "unid.",
+    });
+    items.push({ item: "riel superior tipo granero", cantidad: 1, unidad: "unid." });
+    items.push({ item: "guía de piso (no carga)", cantidad: 1, unidad: "unid." });
+  } else {
+    const rueda =
+      spec.rueda === "canal_u"
+        ? "ruedas canal en U para portón"
+        : spec.rueda === "nylon"
+          ? "ruedas de nylon para portón"
+          : "ruedas canal en V para portón";
+    items.push({ item: rueda, cantidad: 2, unidad: "unid." });
+    items.push({ item: "riel / guía inferior", cantidad: 1, unidad: "unid." });
+    items.push({ item: "rodillo guía superior", cantidad: 1, unidad: "unid." });
+  }
+  items.push({ item: "tope de portón", cantidad: 1, unidad: "unid." });
+  if (spec.cerradura === "gancho") {
+    items.push({ item: "cerradura de gancho para portón", cantidad: 1, unidad: "unid." });
+  } else if (spec.cerradura === "pasador") {
+    items.push({ item: "pasador al piso para portón", cantidad: 1, unidad: "unid." });
+  }
+  return items;
+}
+
+function herrajesCable(parts) {
+  const n = parts.filter((p) => p.profile?.shape === "cable").length;
+  if (!n) return [];
+  return [
+    { item: "tensores (templadores) para cable", cantidad: n, unidad: "unid." },
+    { item: "guardacabos", cantidad: n * 2, unidad: "unid." },
+    { item: "prensacables (grampas)", cantidad: n * 4, unidad: "unid." },
+    { item: "cáncamos o argollas soldables", cantidad: n * 2, unidad: "unid." },
+  ];
+}
+
 export function buildBom(spec, geometry) {
   const { parts, joints, meta } = geometry;
   const byProfile = new Map();
 
   for (const part of parts) {
-    if (part.kind === "hinge" || part.kind === "wheel") continue;
+    if (isHardware(part)) continue;
     const key = part.profile.id;
     if (!byProfile.has(key)) {
       byProfile.set(key, {
@@ -110,11 +161,17 @@ export function buildBom(spec, geometry) {
       .sort((a, b) => b[0] - a[0])
       .map(([L, n]) => `${n} de ${L} mm`);
 
-    const leftoverMm = packed.length * STOCK - packed.reduce(
-      (sum, bar) => sum + bar.cuts.reduce((s, c) => s + c + KERF, 0),
-      0,
-    );
-    const unidad6m = group.perfil.shape === "round" ? "barras de 6 m" : "caños de 6 m";
+    const esCable = group.perfil.shape === "cable";
+    const metrosCompra = esCable
+      ? Math.ceil((totalMm + group.cortes.length * 300) / 1000)
+      : packed.length * (STOCK / 1000);
+    const leftoverMm = esCable
+      ? 0
+      : packed.length * STOCK -
+        packed.reduce((sum, bar) => sum + bar.cuts.reduce((s, c) => s + c + KERF, 0), 0);
+    const unidad6m = esCable ? "m" : unidadBarra(group.perfil.shape, packed.length);
+    const pedido = esCable ? `${metrosCompra} m` : `${packed.length} ${unidad6m}`;
+    const kgBarra = area_m2 * (STOCK / 1000) * STEEL;
 
     cortes.push({
       perfil_id: group.perfil.id,
@@ -123,9 +180,12 @@ export function buildBom(spec, geometry) {
       roles: [...group.roles],
       cantidad_piezas: group.cortes.length,
       metros: Number((totalMm / 1000).toFixed(2)),
-      barras_6m: packed.length,
+      metros_compra: metrosCompra,
+      barras_6m: esCable ? 0 : packed.length,
+      kg_barra: Number(kgBarra.toFixed(3)),
+      precio_m: group.perfil.precio_m || 0,
       unidad_6m: unidad6m,
-      pedido: `${packed.length} ${unidad6m}`,
+      pedido,
       sobrante_m: Number(Math.max(0, leftoverMm / 1000).toFixed(2)),
       peso_kg: Number(kg.toFixed(2)),
       pintura_m2: Number(paint.toFixed(2)),
@@ -158,11 +218,11 @@ export function buildBom(spec, geometry) {
   };
 
   const pintura_m2_n = Number(pintura_m2.toFixed(2));
-
-  return {
+  const herrajes = [...herrajesFor(spec), ...herrajesCable(parts)];
+  const bom = {
     tipo: tipoById(spec.tipo).nombre,
     cortes,
-    herrajes: herrajesFor(spec),
+    herrajes,
     discos: discosAmoladora(cortes.reduce((s, c) => s + c.cantidad_piezas, 0)),
     pintura: [
       { item: "antióxido para hierro", cantidad: pintura_m2_n, unidad: "m²" },
@@ -179,16 +239,29 @@ export function buildBom(spec, geometry) {
     },
     aviso: avisoFor(spec, meta),
   };
+  bom.precio = estimarPrecio(bom);
+  bom.resumen.precio_uyu = bom.precio.total_uyu;
+  bom.resumen.precio_txt = bom.precio.texto;
+  return bom;
+}
+
+function nombreTirante(spec) {
+  const perfil = parsePerfil(spec.tirante_perfil);
+  if (perfil?.shape === "cable") return "tirante de cable";
+  if (perfil?.shape === "flat") return "tirante de planchuela";
+  if (perfil?.shape === "angle") return "tirante de ángulo";
+  return "tirante de caño";
 }
 
 function avisoFor(spec, meta) {
   const base =
     "En casa de hierros pedí de 6 m. Los cortes los hacés vos en el taller (amoladora). Controlá el vano en obra.";
+  const tirante = nombreTirante(spec);
   if (spec.tipo === "porton_corredizo") {
-    return `${base} El marco largo se descuadra si queda rectangular. Lleva tirante de caño en cada paño, de la esquina de abajo a la izquierda a la de arriba a la derecha, para que no baje una punta.`;
+    return `${base} El marco largo se descuadra si queda rectangular. Lleva ${tirante} en cada paño, de la esquina de abajo a la izquierda a la de arriba a la derecha, para que no baje una punta.`;
   }
   if (spec.tipo === "porton_dos_hojas") {
-    return `${base} Cada hoja lleva un tirante de caño: de la esquina de abajo del lado de la bisagra a la de arriba del encuentro. Cerrado se ve como una V, así no baja el picaporte.`;
+    return `${base} Cada hoja lleva un ${tirante}: de la esquina de abajo del lado de la bisagra a la de arriba del encuentro. Cerrado se ve como una V, así no baja el picaporte.`;
   }
   if (spec.tipo === "reja_ventana") {
     const extra = meta.parantes
@@ -197,7 +270,7 @@ function avisoFor(spec, meta) {
     return `${base} Esta reja va anclada al vano: no necesita tirante.${extra}`;
   }
   if (meta.arriostrado) {
-    return `${base} Hoja ancha: tirante de caño de la esquina de abajo (lado bisagra) a la de arriba (lado libre), para que no baje el picaporte.`;
+    return `${base} Hoja ancha: ${nombreTirante(spec)} de la esquina de abajo (lado bisagra) a la de arriba (lado libre), para que no baje el picaporte.`;
   }
   return `${base} Hoja angosta: con tres bisagras el marco no necesita tirante.`;
 }

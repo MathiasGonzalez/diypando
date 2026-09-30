@@ -1,4 +1,4 @@
-import { applyPatch, getCatalog, TIPOS, ESTILOS, MARCOS, BARROTES, ESTRUCTURALES } from "./catalog.js";
+import { applyPatch, getCatalog, TIPOS, ESTILOS, MARCOS, BARROTES, ESTRUCTURALES, TIRANTES } from "./catalog.js";
 import { runDesign } from "./design.js";
 
 const MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
@@ -29,8 +29,8 @@ const TOOLS = [
         },
         tirante_perfil: {
           type: "string",
-          enum: ESTRUCTURALES.map((m) => m.id),
-          description: "Caño de los tirantes",
+          enum: TIRANTES.map((m) => m.id),
+          description: "Tirante: caño, planchuela, ángulo o cable de acero",
         },
         refuerzo_perfil: {
           type: "string",
@@ -42,6 +42,12 @@ const TOOLS = [
         travesanos: { type: "integer" },
         lado_bisagra: { type: "string", enum: ["izquierda", "derecha", "exterior"] },
         incluir_umbral: { type: "boolean" },
+        soporte: { type: "string", enum: ["riel_piso", "granero"] },
+        rueda: {
+          type: "string",
+          enum: ["canal_v", "canal_u", "nylon", "carrito_simple", "carrito_doble"],
+        },
+        cerradura: { type: "string", enum: ["ninguna", "gancho", "pasador"] },
       },
     },
   },
@@ -50,15 +56,16 @@ const TOOLS = [
 function systemPrompt(design) {
   const { spec, bom } = design;
   return `Sos el asistente de taller de DIY Pando, en Uruguay. Hablás uruguayo, breve y concreto.
-Terminología de casa de hierros y ferretería: caño estructural, hierro redondo del 12, electrodo 6013 (electrodo 13) de 2,5 o 3,2, caños de 6 m, antióxido, esmalte sintético, mano izquierda/derecha, tarugos, riel, falleba.
+Terminología de casa de hierros y ferretería: caño estructural, planchuela, ángulo, cable de acero, hierro redondo del 12, electrodo 6013 (electrodo 13) de 2,5 o 3,2, caños de 6 m, antióxido, esmalte sintético, mano izquierda/derecha, tarugos, riel, falleba, tensor.
 El usuario arma puertas y rejas. Podés cambiar el diseño con la herramienta aplicar_diseno.
-NUNCA inventes metros, kg ni electrodos: usá solo los datos calculados que te pasan.
+NUNCA inventes metros, kg, electrodos ni precios: usá solo los datos calculados que te pasan. El precio estimado está en resumen.precio_txt.
 Si pide cambio de medidas, tipo, caños o luz, llamá aplicar_diseno.
 Si solo pregunta, contestá con la lista para pedir.
 
 Tipos: ${TIPOS.map((t) => t.id).join(", ")}
-Caños de marco: ${MARCOS.map((m) => m.id).join(", ")}
-Caños de travesaños, tirantes y parantes: ${ESTRUCTURALES.map((m) => m.id).join(", ")}
+Marco (caño, planchuela o ángulo): ${MARCOS.map((m) => m.id).join(", ")}
+Travesaños y parantes: ${ESTRUCTURALES.map((m) => m.id).join(", ")}
+Tirantes (incluye cable): ${TIRANTES.map((m) => m.id).join(", ")}
 Barrotes: ${BARROTES.map((b) => b.id).join(", ")}
 
 Diseño actual (JSON): ${JSON.stringify(spec)}
@@ -140,6 +147,29 @@ function perfilEstructural(fragmento) {
   return elegido?.id || null;
 }
 
+function materialNombrado(fragmento, { cable = false } = {}) {
+  if (cable && /cable/.test(fragmento)) {
+    if (/cable(?:\s+\S+){0,4}\s+8\b|\b8\s*mm/.test(fragmento)) return "cable8";
+    if (/cable(?:\s+\S+){0,4}\s+4\b|\b4\s*mm/.test(fragmento)) return "cable4";
+    return "cable6";
+  }
+  if (/planchuela|pletina/.test(fragmento)) {
+    const n = fragmento.match(/(\d{2})/);
+    const w = n ? Number(n[1]) : 40;
+    if (w >= 50) return "pl50x5";
+    if (w >= 40) return "pl40x4";
+    if (w >= 30) return "pl30x3";
+    return "pl25x3";
+  }
+  if (/angulo/.test(fragmento)) {
+    if (/50/.test(fragmento)) return "L50x50x5";
+    if (/25/.test(fragmento)) return "L25x25x3";
+    if (/30/.test(fragmento)) return "L30x30x3";
+    return "L40x40x4";
+  }
+  return perfilEstructural(fragmento);
+}
+
 export function localPatchFromText(text) {
   const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const patch = {};
@@ -156,12 +186,12 @@ export function localPatchFromText(text) {
   let resto = t;
   const nombrados = [
     [/travesan\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "travesano_perfil"],
-    [/tirante\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "tirante_perfil"],
+    [/tirante\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,5}/, "tirante_perfil"],
     [/parante\w*(?:\s+(?!marco|barrote|travesan|tirante|parante)\S+){0,3}/, "refuerzo_perfil"],
   ];
   for (const [re, key] of nombrados) {
     const frase = resto.match(re);
-    const id = frase && perfilEstructural(frase[0]);
+    const id = frase && materialNombrado(frase[0], { cable: key === "tirante_perfil" });
     if (!id) continue;
     patch[key] = id;
     resto = resto.replace(frase[0], " ");
@@ -174,7 +204,17 @@ export function localPatchFromText(text) {
   else if (/16\s*x\s*16/.test(resto)) patch.barrote = "16x16x1.2";
   else if (/20\s*x\s*20/.test(resto)) patch.barrote = "20x20x1.2";
 
-  if (/80\s*x\s*40/.test(resto)) patch.marco_perfil = "80x40x1.6";
+  if (!patch.marco_perfil && /planchuela|pletina/.test(resto) && !/barrote/.test(resto)) {
+    const id = materialNombrado(resto);
+    patch.marco_perfil = id;
+    if (!patch.travesano_perfil) patch.travesano_perfil = id;
+    if (!patch.refuerzo_perfil) patch.refuerzo_perfil = id;
+  } else if (!patch.marco_perfil && /angulo/.test(resto) && !/barrote/.test(resto)) {
+    const id = materialNombrado(resto);
+    patch.marco_perfil = id;
+    if (!patch.travesano_perfil) patch.travesano_perfil = id;
+    if (!patch.refuerzo_perfil) patch.refuerzo_perfil = id;
+  } else if (/80\s*x\s*40/.test(resto)) patch.marco_perfil = "80x40x1.6";
   else if (/50\s*x\s*50/.test(resto)) patch.marco_perfil = "50x50x1.6";
   else if (/40\s*x\s*20/.test(resto)) patch.marco_perfil = "40x20x1.6";
   else if (/30\s*x\s*30/.test(resto)) patch.marco_perfil = "30x30x1.2";
@@ -212,6 +252,19 @@ export function localPatchFromText(text) {
   if (/(?:bisagra|mano)\s*(a la\s*)?derecha/.test(t)) patch.lado_bisagra = "derecha";
   if (/(?:bisagra|mano)\s*(a la\s*)?izquierda/.test(t)) patch.lado_bisagra = "izquierda";
 
+  if (/granero|riel arriba|colgad/.test(t)) patch.soporte = "granero";
+  else if (/riel (al )?piso|ruedas abajo/.test(t)) patch.soporte = "riel_piso";
+
+  if (/carrito doble|dos rodillos/.test(t)) patch.rueda = "carrito_doble";
+  else if (/carrito/.test(t)) patch.rueda = "carrito_simple";
+  else if (/nylon/.test(t)) patch.rueda = "nylon";
+  else if (/canal.?u|canal en u/.test(t)) patch.rueda = "canal_u";
+  else if (/canal.?v|canal en v/.test(t)) patch.rueda = "canal_v";
+
+  if (/sin cerradura/.test(t)) patch.cerradura = "ninguna";
+  else if (/pasador al piso|cerradura pasador/.test(t)) patch.cerradura = "pasador";
+  else if (/cerradura de gancho|gancho/.test(t)) patch.cerradura = "gancho";
+
   return patch;
 }
 
@@ -222,7 +275,7 @@ function describeLocal(design, patch) {
   const changed = keys.length
     ? `Listo, actualicé el pedido.`
     : "No marqué un cambio; te dejo lo que hay que pedir ahora.";
-  return `${changed} ${spec.ancho}×${spec.alto} mm, ${bom.tipo}. ${bom.resumen.barrotes} barrotes, luz ${bom.resumen.luz_real_mm} mm. Electrodo ${e.tipo} de ${e.diametro_txt || e.diametro_mm} mm: ${e.pedido}. Peso aprox. ${bom.resumen.peso_kg} kg. Estimado de taller, no es presupuesto.`;
+  return `${changed} ${spec.ancho}×${spec.alto} mm, ${bom.tipo}. ${bom.resumen.barrotes} barrotes, luz ${bom.resumen.luz_real_mm} mm. Electrodo ${e.tipo} de ${e.diametro_txt || e.diametro_mm} mm: ${e.pedido}. Peso aprox. ${bom.resumen.peso_kg} kg. Materiales, estimado ${bom.resumen.precio_txt || ""}. No es presupuesto.`;
 }
 
 async function runModel(env, payload) {

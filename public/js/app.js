@@ -32,11 +32,15 @@ function tituloDe(part) {
     "poste-der": "Poste derecho",
     "travesano-sup": "Travesaño superior",
     umbral: "Travesaño de abajo",
-    "guia-inferior": "Guía inferior",
+    "guia-inferior": "Riel al piso",
+    "riel-superior": "Riel superior",
+    "guia-piso": "Guía de piso",
+    "rodillo-guia": "Rodillo guía",
+    cerradura: "Cerradura",
     tirante: "Tirante",
   };
   if (fijos[base]) return fijos[base] + hoja;
-  const match = base.match(/^(barrote-[vh]|tirante|refuerzo|bisagra|rueda|travesano)-(\d+)$/);
+  const match = base.match(/^(barrote-[vh]|tirante|refuerzo|bisagra|rueda|carrito|travesano)-(\d+)$/);
   const nombres = {
     "barrote-v": "Barrote",
     "barrote-h": "Barrote",
@@ -44,6 +48,7 @@ function tituloDe(part) {
     refuerzo: "Refuerzo",
     bisagra: "Bisagra",
     rueda: "Rueda",
+    carrito: "Carrito",
     travesano: "Travesaño",
   };
   if (match) return `${nombres[match[1]]} ${match[2]}${hoja}`;
@@ -73,12 +78,12 @@ function renderPieza() {
   $("pieza-cerrar").classList.toggle("is-hidden", !pinned);
   $("pieza-titulo").textContent = tituloDe(part);
   $("pieza-perfil").textContent = part.profile?.nombre || "";
-  const esHerraje = part.kind === "hinge" || part.kind === "wheel";
+  const esHerraje = ["hinge", "wheel", "trolley", "lock", "guide_roller"].includes(part.kind);
   $("pieza-corte").textContent = part.kind === "hinge"
     ? "A soldar · 100 mm"
     : esHerraje
-      ? ""
-      : `Corte ${Math.round(part.length || 0).toLocaleString("es-UY")} mm`;
+    ? ""
+    : `Corte ${Math.round(part.length || 0).toLocaleString("es-UY")} mm`;
 }
 
 function onHoverPieza(id) {
@@ -114,18 +119,38 @@ function specFromForm() {
     travesanos: Number(form.travesanos.value),
     lado_bisagra: form.lado_bisagra.value,
     incluir_umbral: form.incluir_umbral.checked,
+    soporte: form.soporte?.value,
+    rueda: form.rueda?.value,
+    cerradura: form.cerradura?.value,
   };
 }
 
+function ruedasDe(soporte) {
+  return soporte === "granero" ? state.catalog.ruedas_granero : state.catalog.ruedas_riel;
+}
+
 function fillSelect(el, items, value) {
-  el.replaceChildren(
-    ...items.map((item) => {
+  el.replaceChildren();
+  const groups = [];
+  for (const item of items) {
+    const grupo = item.grupo || "";
+    const last = groups[groups.length - 1];
+    if (!last || last.grupo !== grupo) groups.push({ grupo, items: [item] });
+    else last.items.push(item);
+  }
+  for (const group of groups) {
+    const parent = group.grupo ? document.createElement("optgroup") : el;
+    if (group.grupo) {
+      parent.label = group.grupo;
+      el.appendChild(parent);
+    }
+    for (const item of group.items) {
       const opt = document.createElement("option");
       opt.value = item.id;
       opt.textContent = item.nombre;
-      return opt;
-    }),
-  );
+      parent.appendChild(opt);
+    }
+  }
   if (value) el.value = value;
 }
 
@@ -162,6 +187,13 @@ function syncForm() {
   $("travesanos").value = s.travesanos;
   $("lado_bisagra").value = s.lado_bisagra;
   $("incluir_umbral").checked = s.incluir_umbral;
+  const corredizo = s.tipo === "porton_corredizo";
+  $("opciones-corredizo").classList.toggle("is-hidden", !corredizo);
+  if (corredizo) {
+    fillSelect($("soporte"), state.catalog.soportes_corredizo, s.soporte);
+    fillSelect($("rueda"), ruedasDe(s.soporte), s.rueda);
+    fillSelect($("cerradura"), state.catalog.cerraduras_corredizo, s.cerradura);
+  }
 }
 
 function uyNum(n, digits = 2) {
@@ -203,7 +235,7 @@ function renderFotosMaterial(spec) {
   const nombres = [
     nombrePerfil(state.catalog.marcos, spec.marco_perfil),
     nombrePerfil(state.catalog.estructurales, spec.travesano_perfil),
-    nombrePerfil(state.catalog.estructurales, spec.tirante_perfil),
+    nombrePerfil(state.catalog.tirantes, spec.tirante_perfil),
     nombrePerfil(state.catalog.estructurales, spec.refuerzo_perfil),
     nombrePerfil(state.catalog.barrotes, spec.barrote),
   ].filter(Boolean);
@@ -242,7 +274,12 @@ function renderBom(design) {
     <div><span>Luz real</span><strong>${bom.resumen.luz_real_mm} mm</strong></div>
     <div><span>Peso</span><strong>${uyNum(bom.resumen.peso_kg, 2)} kg</strong></div>
     <div><span>Antióxido</span><strong>${uyNum(bom.resumen.pintura_m2, 2)} m²</strong></div>
+    <div><span>Estimado</span><strong>${bom.precio?.texto || "—"}</strong></div>
   `;
+  const precio = bom.precio;
+  $("precio-valor").textContent = precio?.texto || "—";
+  $("precio-detalle").textContent = precio?.detalle || "";
+  $("precio-nota").textContent = precio?.nota || "";
   $("pedido-hierros").innerHTML = bom.cortes
     .map((c) => liConFoto(`<strong>${c.pedido}</strong> de ${c.perfil}`, c.perfil))
     .join("");
@@ -325,17 +362,36 @@ function syncHeatLegend() {
 
 let viewMode = "soldar";
 
+function asmCaption(info) {
+  if (!info || !info.total) return "Sin piezas";
+  if (info.done) return `Ensamble ${info.total} / ${info.total} · listo, solo falta pintar y colocar`;
+  if (!info.index) return `${info.label} · dale reproducir`;
+  return `Paso ${info.index} / ${info.total} · ${info.phase} · ${info.label}`;
+}
+
 function setViewMode(mode) {
-  viewMode = mode === "resistencia" ? "resistencia" : "soldar";
+  viewMode = mode === "resistencia" ? "resistencia" : mode === "ensamble" ? "ensamble" : "soldar";
   scene.setMode(viewMode);
-  const soldar = viewMode === "soldar";
-  $("mode-soldar").classList.toggle("is-on", soldar);
-  $("mode-resist").classList.toggle("is-on", !soldar);
-  $("mode-soldar").setAttribute("aria-pressed", soldar ? "true" : "false");
-  $("mode-resist").setAttribute("aria-pressed", soldar ? "false" : "true");
-  $("weld-controls").classList.toggle("is-hidden", !soldar);
-  $("resist-controls").classList.toggle("is-hidden", soldar);
+  for (const [id, m] of [
+    ["mode-soldar", "soldar"],
+    ["mode-resist", "resistencia"],
+    ["mode-ensamble", "ensamble"],
+  ]) {
+    $(id).classList.toggle("is-on", viewMode === m);
+    $(id).setAttribute("aria-pressed", viewMode === m ? "true" : "false");
+  }
+  $("weld-controls").classList.toggle("is-hidden", viewMode !== "soldar");
+  $("resist-controls").classList.toggle("is-hidden", viewMode !== "resistencia");
+  $("asm-controls").classList.toggle("is-hidden", viewMode !== "ensamble");
+  if (viewMode === "soldar") $("weld-label").textContent = "Soldaduras en orden de taller";
   syncHeatLegend();
+}
+
+function onAsmChange(info) {
+  if (viewMode !== "ensamble") return;
+  $("weld-label").textContent = asmCaption(info);
+  const slider = $("asm-progress");
+  if (document.activeElement !== slider) slider.value = String(Math.round((info.frac || 0) * 1000));
 }
 
 function bindWelds() {
@@ -355,6 +411,15 @@ function bindWelds() {
   $("weld-restart").addEventListener("click", () => scene.restart());
   $("weld-speed").addEventListener("change", (event) => scene.setSpeed(event.target.value));
   $("mode-soldar").addEventListener("click", () => setViewMode("soldar"));
+  $("mode-ensamble").addEventListener("click", () => setViewMode("ensamble"));
+  $("asm-play").addEventListener("click", () => scene.playAsm());
+  $("asm-pause").addEventListener("click", () => scene.pauseAsm());
+  $("asm-prev").addEventListener("click", () => scene.stepAsm(-1));
+  $("asm-next").addEventListener("click", () => scene.stepAsm(1));
+  $("asm-restart").addEventListener("click", () => scene.restartAsm());
+  $("asm-finish").addEventListener("click", () => scene.finishAsm());
+  $("asm-speed").addEventListener("change", (event) => scene.setAsmSpeed(event.target.value));
+  $("asm-progress").addEventListener("input", (event) => scene.seekAsm(Number(event.target.value) / 1000));
   $("mode-resist").addEventListener("click", () => setViewMode("resistencia"));
   $("resist-play").addEventListener("click", () => scene.playResist());
   $("resist-pause").addEventListener("click", () => scene.pauseResist());
@@ -381,6 +446,7 @@ function applyDesign(design) {
     onSelect: onSelectPieza,
   });
   renderBom(design);
+  scene.setAssembly(design.joints, onAsmChange);
   $("status").textContent = `${design.parts.length} piezas · ${design.joints.length} uniones a soldar`;
   if (viewMode === "resistencia") {
     $("weld-label").textContent = resistCaption({ load: 0 });
@@ -453,7 +519,9 @@ function bindTabs() {
       }
       $("view-3d").classList.toggle("is-hidden", view !== "3d");
       $("view-2d").classList.toggle("is-hidden", view !== "2d");
+      $("view-pedido").classList.toggle("is-hidden", view !== "pedido");
       $("weld-bar").classList.toggle("is-hidden", view !== "3d");
+      if (view === "pedido") $("pieza").classList.add("is-hidden");
       syncHeatLegend();
       if (view === "3d") scene.resize();
     });
@@ -466,7 +534,7 @@ async function boot() {
   fillSelect($("estilo"), state.catalog.estilos);
   fillSelect($("marco_perfil"), state.catalog.marcos);
   fillSelect($("travesano_perfil"), state.catalog.estructurales);
-  fillSelect($("tirante_perfil"), state.catalog.estructurales);
+  fillSelect($("tirante_perfil"), state.catalog.tirantes);
   fillSelect($("refuerzo_perfil"), state.catalog.estructurales);
   fillSelect($("barrote"), state.catalog.barrotes);
   state.spec = state.catalog.default_spec;
@@ -477,7 +545,12 @@ async function boot() {
   scene.setPickHandlers({ onHover: onHoverPieza, onSelect: onSelectPieza });
   $("pieza-cerrar").addEventListener("click", () => onSelectPieza(null));
   $("form").addEventListener("input", scheduleRefresh);
-  $("form").addEventListener("change", scheduleRefresh);
+  $("form").addEventListener("change", (event) => {
+    if (event.target.id === "soporte") {
+      fillSelect($("rueda"), ruedasDe(event.target.value));
+    }
+    scheduleRefresh();
+  });
   $("chat-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const input = $("chat-input");

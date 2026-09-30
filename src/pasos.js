@@ -1,11 +1,13 @@
-import { tipoById } from "./catalog.js";
+import { isHardware, tipoById } from "./catalog.js";
 
 function esVertical(part) {
   return Math.abs(part.to[1] - part.from[1]) >= Math.abs(part.to[0] - part.from[0]);
 }
 
-function etiquetaPieza(part) {
+export function etiquetaPieza(part) {
   const id = part.id || "";
+  if (id === "riel-superior") return "riel superior";
+  if (id === "guia-piso") return "guía de piso";
   if (part.role === "guia") return "riel / guía";
   if (part.role === "tirante") return "tirante";
   if (part.role === "refuerzo") return "parante (palo de pie intermedio)";
@@ -18,13 +20,15 @@ function etiquetaPieza(part) {
   return part.role || "pieza";
 }
 
-function ordenPieza(part) {
+export function ordenPieza(part) {
   const etiqueta = etiquetaPieza(part);
   if (etiqueta.startsWith("larguero")) return 10;
   if (etiqueta.includes("abajo")) return 20;
   if (etiqueta.includes("arriba")) return 30;
   if (etiqueta === "travesaño del marco") return 35;
   if (etiqueta === "riel / guía") return 40;
+  if (etiqueta === "riel superior") return 40;
+  if (etiqueta === "guía de piso") return 42;
   if (etiqueta.startsWith("parante")) return 50;
   if (etiqueta === "tirante") return 55;
   if (etiqueta === "travesaño intermedio") return 60;
@@ -69,13 +73,15 @@ function pluralEtiqueta(etiqueta, n) {
   if (etiqueta.startsWith("parante")) return "parantes (palos de pie intermedios)";
   if (etiqueta === "tirante") return "tirantes";
   if (etiqueta === "riel / guía") return "rieles / guías";
+  if (etiqueta === "riel superior") return "rieles superiores";
+  if (etiqueta === "guía de piso") return "guías de piso";
   return etiqueta;
 }
 
 function agruparCortes(parts) {
   const map = new Map();
   for (const part of parts) {
-    if (part.kind === "hinge" || part.kind === "wheel") continue;
+    if (isHardware(part)) continue;
     const largo = Math.round(part.length);
     const etiqueta = etiquetaPieza(part);
     const key = `${ordenPieza(part)}|${etiqueta}|${part.profile.id}|${largo}`;
@@ -105,17 +111,29 @@ function itemsArriostrado(spec, grupos) {
     items.push("Colocá los travesaños intermedios en su lugar, a escuadra, punteá y soldá.");
   }
   if (hasTirante) {
-    if (spec.tipo === "porton_corredizo") {
+    const cable = grupos.some((g) => g.etiqueta === "tirante" && /cable de acero/.test(g.perfil));
+    const abierto = grupos.some((g) => g.etiqueta === "tirante" && /planchuela|ángulo/.test(g.perfil));
+    if (cable) {
+      const donde =
+        spec.tipo === "porton_corredizo"
+          ? "En cada paño, de la esquina de abajo a la izquierda a la de arriba a la derecha."
+          : spec.tipo === "porton_dos_hojas"
+            ? "En cada hoja, de abajo del lado de la bisagra hacia arriba del lado libre. Cerrado se ve como una V."
+            : "De abajo del lado de la bisagra hacia arriba del lado libre.";
       items.push(
-        "El tirante va antes de los barrotes. En cada paño: de la esquina de abajo a la izquierda a la de arriba a la derecha. Presentá, marcá las puntas, punteá y soldá. Sin esto el marco se va a paralelogramo y baja una punta.",
+        `El tirante es cable: no se suelda. ${donde} Soldá un cáncamo en cada esquina, armá el ojal con guardacabo y prensacables, y templá con el tensor. Sin eso el marco se va a paralelogramo.`,
+      );
+    } else if (spec.tipo === "porton_corredizo") {
+      items.push(
+        `El tirante va antes de los barrotes. En cada paño: de la esquina de abajo a la izquierda a la de arriba a la derecha. Presentá, marcá las puntas, punteá y soldá.${abierto ? " Si es planchuela o ángulo, la cara ancha apoya en el marco." : ""} Sin esto el marco se va a paralelogramo y baja una punta.`,
       );
     } else if (spec.tipo === "porton_dos_hojas") {
       items.push(
-        "El tirante va antes de los barrotes. En cada hoja: de abajo, del lado de la bisagra, hacia arriba del lado libre (el encuentro). Cerrado se ve como una V. Presentá, punteá y soldá.",
+        `El tirante va antes de los barrotes. En cada hoja: de abajo, del lado de la bisagra, hacia arriba del lado libre (el encuentro). Cerrado se ve como una V. Presentá, punteá y soldá.${abierto ? " Si es planchuela o ángulo, la cara ancha apoya en el marco." : ""}`,
       );
     } else {
       items.push(
-        "El tirante va antes de los barrotes: de abajo del lado de la bisagra hacia arriba del lado libre. Presentá, punteá y soldá. Así no baja el picaporte.",
+        `El tirante va antes de los barrotes: de abajo del lado de la bisagra hacia arriba del lado libre. Presentá, punteá y soldá.${abierto ? " Si es planchuela o ángulo, la cara ancha apoya en el marco." : ""} Así no baja el picaporte.`,
       );
     }
   }
@@ -134,10 +152,17 @@ function colocacion(spec) {
     ];
   }
   if (spec.tipo === "porton_corredizo") {
+    if (spec.soporte === "granero") {
+      return [
+        "Fijá el riel arriba, a nivel, más largo que la hoja (recorrido de apertura).",
+        "Colgá los carritos del riel y atornillalos al travesaño de arriba. Probá que corra sin trabarse.",
+        "Colocá la guía corta al piso, el tope y la cerradura. La guía no carga: solo evita que se menee.",
+      ];
+    }
     return [
       "Fijá el riel abajo, a nivel, en todo el recorrido (hoja + holgura de apertura).",
       "Apoyá las ruedas sobre el riel y probá que corra sin trabarse.",
-      "Colocá el tope y la cerradura. No lo dejes sin tope: se sale.",
+      "Colocá el rodillo guía arriba del lado de cola, el tope y la cerradura. No lo dejes sin tope: se sale.",
     ];
   }
   if (spec.tipo === "porton_dos_hojas") {
@@ -157,7 +182,7 @@ function colocacion(spec) {
 }
 
 export function buildPasos(spec, geometry, bom) {
-  const aceros = geometry.parts.filter((p) => p.kind !== "hinge" && p.kind !== "wheel");
+  const aceros = geometry.parts.filter((p) => !isHardware(p));
   const grupos = agruparCortes(aceros);
   const discos = discosAmoladora(aceros.length);
   const tipo = tipoById(spec.tipo).nombre;
@@ -165,6 +190,9 @@ export function buildPasos(spec, geometry, bom) {
   const cortes = grupos.map((g) => {
     const nombre = pluralEtiqueta(g.etiqueta, g.cantidad);
     const igual = g.cantidad > 1 ? " Todas iguales." : "";
+    if (g.etiqueta === "tirante" && /cable de acero/.test(g.perfil)) {
+      return `Cortá ${g.cantidad} ${nombre} de ${g.largo} mm de ${g.perfil}, y sumá unos 300 mm por punta para el ojal. No va a inglete ni se suelda.`;
+    }
     if (g.etiqueta === "tirante") {
       const presentá = g.cantidad > 1 ? "Presentalos" : "Presentalo";
       return `Cortá ${g.cantidad} ${nombre} de ${g.largo} mm, en ${g.perfil}.${igual} ${presentá} en el marco ya escuadrado y marcá las puntas; el corte va a inglete para apoyar en las dos esquinas.`;
@@ -195,7 +223,7 @@ export function buildPasos(spec, geometry, bom) {
         items: [
           "Pedí barras enteras de 6 m (no la reja cortada):",
           ...bom.cortes.map((c) => `${c.pedido} de ${c.perfil}.`),
-          "Revisá que te den el espesor que pediste (1,2 o 1,6). Cargá derecho, sin doblar los caños.",
+          `Revisá que te den el espesor que pediste.${bom.cortes.some((c) => c.shape === "cable") ? " El cable se pide por metro, con sobra para los ojales." : ""} Cargá derecho, sin doblar los caños.`,
         ],
       },
       {
@@ -261,7 +289,9 @@ export function buildPasos(spec, geometry, bom) {
           spec.tipo === "reja_ventana"
             ? "Esta reja no lleva bisagras. Las fijaciones van cuando la coloques en la pared."
             : spec.tipo === "porton_corredizo"
-              ? "Soldá o atornillá las ruedas abajo, alineadas con el riel. El riel se fija en obra, no ahora en el aire."
+              ? spec.soporte === "granero"
+                ? "Atornillá los carritos al travesaño de arriba, alineados con el riel. El riel se fija en obra, al dintel o a la pared."
+                : "Soldá o atornillá las ruedas abajo, alineadas con el riel. El riel se fija en obra, no ahora en el aire."
               : "Soldá o atornillá las bisagras del lado de la mano que elegiste. Probá el movimiento antes de la pintura.",
           "Cerradura y pasadores: presentalos, marcá, y fijalos. Si pintás primero, después no pegan bien los tornillos.",
         ],

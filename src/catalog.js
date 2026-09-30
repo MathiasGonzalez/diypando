@@ -1,4 +1,4 @@
-import { nombreCaño, nombreRedondo } from "./format.js";
+import { nombreAngulo, nombreCable, nombreCaño, nombrePlanchuela, nombreRedondo } from "./format.js";
 
 export const TIPOS = [
   {
@@ -56,6 +56,9 @@ export const TIPOS = [
       lado_bisagra: "izquierda",
       incluir_umbral: true,
       estilo: "barrotes_verticales",
+      soporte: "riel_piso",
+      rueda: "canal_v",
+      cerradura: "gancho",
     },
   },
   {
@@ -85,27 +88,86 @@ export const ESTILOS = [
   { id: "mixto", nombre: "Mixto (barrotes + travesaños)" },
 ];
 
-export const MARCOS = [
-  { id: "30x30x1.2", nombre: "caño estructural 30x30 x 1,2" },
-  { id: "40x20x1.6", nombre: "caño estructural 40x20 x 1,6" },
-  { id: "40x40x1.6", nombre: "caño estructural 40x40 x 1,6" },
-  { id: "50x50x1.6", nombre: "caño estructural 50x50 x 1,6" },
-  { id: "80x40x1.6", nombre: "caño estructural 80x40 x 1,6" },
+export const SOPORTES_CORREDIZO = [
+  { id: "riel_piso", nombre: "Riel al piso" },
+  { id: "granero", nombre: "Tipo granero (riel arriba)" },
 ];
 
+export const RUEDAS_RIEL = [
+  { id: "canal_v", nombre: "Rueda canal en V" },
+  { id: "canal_u", nombre: "Rueda canal en U" },
+  { id: "nylon", nombre: "Rueda de nylon" },
+];
+
+export const RUEDAS_GRANERO = [
+  { id: "carrito_simple", nombre: "Carrito de un rodillo" },
+  { id: "carrito_doble", nombre: "Carrito de dos rodillos" },
+];
+
+export const CERRADURAS_CORREDIZO = [
+  { id: "ninguna", nombre: "Sin cerradura" },
+  { id: "gancho", nombre: "Cerradura de gancho" },
+  { id: "pasador", nombre: "Pasador al piso" },
+];
+
+export const HARDWARE_KINDS = ["hinge", "wheel", "trolley", "lock", "guide_roller"];
+
+export function isHardware(part) {
+  return HARDWARE_KINDS.includes(part?.kind);
+}
+
+export function ruedasParaSoporte(soporte) {
+  return soporte === "granero" ? RUEDAS_GRANERO : RUEDAS_RIEL;
+}
+
+function cano(id) {
+  const perfil = parsePerfil(id);
+  return { id, grupo: "Caño", nombre: perfil.nombre };
+}
+
+function planchuela(w, t) {
+  return { id: `pl${w}x${t}`, grupo: "Planchuela", nombre: nombrePlanchuela(w, t) };
+}
+
+function angulo(w, t) {
+  return { id: `L${w}x${w}x${t}`, grupo: "Ángulo", nombre: nombreAngulo(w, w, t) };
+}
+
+function cable(diam, precio_m) {
+  return { id: `cable${diam}`, grupo: "Cable", nombre: nombreCable(diam), precio_m };
+}
+
+export const CANOS = ["30x30x1.2", "40x20x1.6", "40x40x1.6", "50x30x2", "50x50x1.6", "60x40x2", "80x40x1.6"].map(
+  cano,
+);
+
+export const PLANCHUELAS = [planchuela(25, 3), planchuela(30, 3), planchuela(40, 4), planchuela(50, 5), planchuela(50, 6)];
+
+export const ANGULOS = [angulo(25, 3), angulo(30, 3), angulo(40, 3), angulo(40, 4), angulo(50, 5)];
+
+export const CABLES = [cable(4, 70), cable(6, 110), cable(8, 170)];
+
+export const MARCOS = [...CANOS, ...PLANCHUELAS, ...ANGULOS];
+
 export const BARROTES = [
-  { id: "16x16x1.2", nombre: "caño estructural 16x16 x 1,2" },
-  { id: "20x20x1.2", nombre: "caño estructural 20x20 x 1,2" },
-  { id: "25x25x1.2", nombre: "caño estructural 25x25 x 1,2" },
-  { id: "10_redondo", nombre: "hierro redondo del 10" },
-  { id: "12_redondo", nombre: "hierro redondo del 12" },
-  { id: "14_redondo", nombre: "hierro redondo del 14" },
+  cano("16x16x1.2"),
+  cano("20x20x1.2"),
+  cano("25x25x1.2"),
+  { id: "8_redondo", grupo: "Redondo", nombre: nombreRedondo(8) },
+  { id: "10_redondo", grupo: "Redondo", nombre: nombreRedondo(10) },
+  { id: "12_redondo", grupo: "Redondo", nombre: nombreRedondo(12) },
+  { id: "14_redondo", grupo: "Redondo", nombre: nombreRedondo(14) },
+  { id: "16_redondo", grupo: "Redondo", nombre: nombreRedondo(16) },
+  { ...planchuela(12, 3), grupo: "Planchuela" },
+  { ...planchuela(20, 3), grupo: "Planchuela" },
 ];
 
 export const ESTRUCTURALES = [
-  ...BARROTES.filter((b) => !b.id.endsWith("_redondo")),
+  ...BARROTES.filter((b) => b.grupo === "Caño"),
   ...MARCOS,
 ];
+
+export const TIRANTES = [...ESTRUCTURALES, ...CABLES];
 
 const LIMITS = {
   ancho: [400, 6000],
@@ -135,6 +197,33 @@ export function parsePerfil(id) {
       nombre: nombreCaño(w, depth, t),
     };
   }
+  const flat = id.match(/^pl(\d+)x(\d+(?:\.\d+)?)$/);
+  if (flat) {
+    const w = Number(flat[1]);
+    const t = Number(flat[2]);
+    return { id, shape: "flat", w, d: t, t, nombre: nombrePlanchuela(w, t) };
+  }
+  const ang = id.match(/^L(\d+)x(\d+)x(\d+(?:\.\d+)?)$/);
+  if (ang) {
+    const w = Number(ang[1]);
+    const depth = Number(ang[2]);
+    const t = Number(ang[3]);
+    return { id, shape: "angle", w, d: depth, t, nombre: nombreAngulo(w, depth, t) };
+  }
+  const cab = id.match(/^cable(\d+)$/);
+  if (cab) {
+    const d = Number(cab[1]);
+    const item = CABLES.find((c) => c.id === id);
+    return {
+      id,
+      shape: "cable",
+      w: d,
+      d,
+      t: d / 2,
+      nombre: nombreCable(d),
+      precio_m: item?.precio_m ?? 110,
+    };
+  }
   return null;
 }
 
@@ -161,11 +250,12 @@ export function validateSpec(input = {}) {
   const base = { ...tipo.defaults, ...input, tipo: tipo.id };
   const idsMarco = new Set(MARCOS.map((m) => m.id));
   const idsEstructural = new Set(ESTRUCTURALES.map((m) => m.id));
+  const idsTirante = new Set(TIRANTES.map((m) => m.id));
   const idsBarrote = new Set(BARROTES.map((b) => b.id));
   const marco = idsMarco.has(base.marco_perfil) ? base.marco_perfil : tipo.defaults.marco_perfil;
   const pieza = (value, fallback) => (idsEstructural.has(value) ? value : fallback);
   const travesano_perfil = pieza(base.travesano_perfil, marco);
-  const tirante_perfil = pieza(base.tirante_perfil, marco);
+  const tirante_perfil = idsTirante.has(base.tirante_perfil) ? base.tirante_perfil : tipo.defaults.tirante_perfil;
   const refuerzo_perfil = pieza(base.refuerzo_perfil, marco);
   const barrote = idsBarrote.has(base.barrote) ? base.barrote : tipo.defaults.barrote;
   const estilo = ESTILOS.some((e) => e.id === base.estilo)
@@ -175,7 +265,7 @@ export function validateSpec(input = {}) {
     ? base.lado_bisagra
     : tipo.defaults.lado_bisagra;
 
-  return {
+  const spec = {
     tipo: tipo.id,
     estilo,
     ancho: clamp(Math.round(num(base.ancho, tipo.defaults.ancho)), ...LIMITS.ancho),
@@ -190,6 +280,19 @@ export function validateSpec(input = {}) {
     lado_bisagra: lado,
     incluir_umbral: Boolean(base.incluir_umbral),
   };
+
+  if (tipo.id === "porton_corredizo") {
+    const idsSoporte = new Set(SOPORTES_CORREDIZO.map((s) => s.id));
+    const idsCerradura = new Set(CERRADURAS_CORREDIZO.map((c) => c.id));
+    const soporte = idsSoporte.has(base.soporte) ? base.soporte : tipo.defaults.soporte;
+    const ruedas = ruedasParaSoporte(soporte);
+    const idsRueda = new Set(ruedas.map((r) => r.id));
+    spec.soporte = soporte;
+    spec.rueda = idsRueda.has(base.rueda) ? base.rueda : ruedas[0].id;
+    spec.cerradura = idsCerradura.has(base.cerradura) ? base.cerradura : tipo.defaults.cerradura;
+  }
+
+  return spec;
 }
 
 export function applyPatch(spec, patch = {}) {
@@ -217,7 +320,12 @@ export function getCatalog() {
     estilos: ESTILOS,
     marcos: MARCOS,
     estructurales: ESTRUCTURALES,
+    tirantes: TIRANTES,
     barrotes: BARROTES,
+    soportes_corredizo: SOPORTES_CORREDIZO,
+    ruedas_riel: RUEDAS_RIEL,
+    ruedas_granero: RUEDAS_GRANERO,
+    cerraduras_corredizo: CERRADURAS_CORREDIZO,
     limits: {
       ancho_mm: LIMITS.ancho,
       alto_mm: LIMITS.alto,

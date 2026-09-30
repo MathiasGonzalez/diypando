@@ -25,6 +25,12 @@ function layoutBars(inner, bar, targetLuz) {
   return { n, gap, centers };
 }
 
+function memberKind(profile) {
+  if (profile.shape === "round" || profile.shape === "cable") return "round";
+  if (profile.shape === "angle") return "angle";
+  return "tube";
+}
+
 function addTube(parts, joints, opts) {
   const { id, role, profile, from, to, group } = opts;
   const axis = sub(to, from);
@@ -33,7 +39,7 @@ function addTube(parts, joints, opts) {
   parts.push({
     id,
     role,
-    kind: profile.shape === "round" ? "round" : "tube",
+    kind: memberKind(profile),
     profile: {
       id: profile.id,
       shape: profile.shape,
@@ -41,6 +47,7 @@ function addTube(parts, joints, opts) {
       d: profile.d,
       t: profile.t,
       nombre: profile.nombre,
+      precio_m: profile.precio_m || 0,
     },
     from,
     to,
@@ -167,6 +174,7 @@ function addTirante(parts, joints, opts) {
     to,
     group: "marco",
   });
+  if (profile.shape === "cable") return;
   const size = fillet || profile.w;
   for (const other of weldTo || []) {
     if (other) weld(joints, id, other, size, "tirante");
@@ -422,17 +430,99 @@ function leafGeometry(spec, originX, leafW, suffix, hingeSide) {
   return { parts, joints, actualLuz, barCount, innerW, innerH, mw, md, hasBottom };
 }
 
-function hardwareParts(spec, md) {
-  const parts = [];
-  if (spec.tipo === "porton_corredizo") {
-    const guia = parsePerfil("40x20x1.6") || {
+function perfilGuia() {
+  return (
+    parsePerfil("40x20x1.6") || {
       id: "40x20x1.6",
       shape: "rect",
       w: 40,
       d: 20,
       t: 1.6,
       nombre: "caño estructural 40x20 x 1,6",
-    };
+    }
+  );
+}
+
+function nombreRueda(style) {
+  if (style === "canal_u") return "rueda canal en U";
+  if (style === "nylon") return "rueda de nylon";
+  if (style === "carrito_doble") return "carrito de dos rodillos";
+  if (style === "carrito_simple") return "carrito de un rodillo";
+  return "rueda canal en V";
+}
+
+function fittingPart(opts) {
+  const { id, kind, style, from, to, length, nombre, w, d, t, side } = opts;
+  return {
+    id,
+    role: "herraje",
+    kind,
+    style,
+    side,
+    from,
+    to: to || from,
+    length,
+    profile: { id: kind, shape: kind, w, d, t, nombre },
+    group: "herrajes",
+  };
+}
+
+function hardwareParts(spec, md) {
+  const parts = [];
+  if (spec.tipo !== "porton_corredizo") return parts;
+
+  const guia = perfilGuia();
+  const z = md / 2;
+  const soporte = spec.soporte || "riel_piso";
+  const rueda = spec.rueda || "canal_v";
+  const abreIzq = spec.lado_bisagra !== "derecha";
+  const lockX = abreIzq ? spec.ancho : 0;
+  const lockSide = abreIzq ? "derecha" : "izquierda";
+  const colaX = abreIzq ? 0 : spec.ancho;
+
+  if (soporte === "granero") {
+    addTube(parts, [], {
+      id: "riel-superior",
+      role: "guia",
+      profile: guia,
+      from: [-200, spec.alto + 45, z],
+      to: [spec.ancho + 600, spec.alto + 45, z],
+      group: "herrajes",
+    });
+    addTube(parts, [], {
+      id: "guia-piso",
+      role: "guia",
+      profile: guia,
+      from: [spec.ancho * 0.35, -18, z],
+      to: [spec.ancho * 0.65, -18, z],
+      group: "herrajes",
+    });
+    const carritoNombre = nombreRueda(rueda);
+    parts.push(
+      fittingPart({
+        id: "carrito-1",
+        kind: "trolley",
+        style: rueda,
+        from: [spec.ancho * 0.2, spec.alto, z],
+        length: 80,
+        nombre: carritoNombre,
+        w: 80,
+        d: 40,
+        t: 8,
+      }),
+      fittingPart({
+        id: "carrito-2",
+        kind: "trolley",
+        style: rueda,
+        from: [spec.ancho * 0.8, spec.alto, z],
+        length: 80,
+        nombre: carritoNombre,
+        w: 80,
+        d: 40,
+        t: 8,
+      }),
+    );
+  } else {
     addTube(parts, [], {
       id: "guia-inferior",
       role: "guia",
@@ -441,27 +531,63 @@ function hardwareParts(spec, md) {
       to: [spec.ancho + 400, -25, guia.d / 2],
       group: "herrajes",
     });
-    parts.push({
-      id: "rueda-1",
-      role: "herraje",
-      kind: "wheel",
-      from: [spec.ancho * 0.2, 0, md / 2],
-      to: [spec.ancho * 0.2, 0, md / 2],
-      length: 80,
-      profile: { id: "rueda", shape: "wheel", w: 80, d: 80, t: 20, nombre: "rueda de portón" },
-      group: "herrajes",
-    });
-    parts.push({
-      id: "rueda-2",
-      role: "herraje",
-      kind: "wheel",
-      from: [spec.ancho * 0.8, 0, md / 2],
-      to: [spec.ancho * 0.8, 0, md / 2],
-      length: 80,
-      profile: { id: "rueda", shape: "wheel", w: 80, d: 80, t: 20, nombre: "rueda de portón" },
-      group: "herrajes",
-    });
+    const ruedaNombre = nombreRueda(rueda);
+    parts.push(
+      fittingPart({
+        id: "rueda-1",
+        kind: "wheel",
+        style: rueda,
+        from: [spec.ancho * 0.2, 0, z],
+        length: 80,
+        nombre: ruedaNombre,
+        w: 80,
+        d: 80,
+        t: 20,
+      }),
+      fittingPart({
+        id: "rueda-2",
+        kind: "wheel",
+        style: rueda,
+        from: [spec.ancho * 0.8, 0, z],
+        length: 80,
+        nombre: ruedaNombre,
+        w: 80,
+        d: 80,
+        t: 20,
+      }),
+      fittingPart({
+        id: "rodillo-guia",
+        kind: "guide_roller",
+        from: [colaX, spec.alto - 40, z],
+        length: 40,
+        nombre: "rodillo guía superior",
+        w: 40,
+        d: 40,
+        t: 12,
+      }),
+    );
   }
+
+  if (spec.cerradura && spec.cerradura !== "ninguna") {
+    const pasador = spec.cerradura === "pasador";
+    const lockY = Math.min(1000, Math.round(spec.alto * 0.55));
+    parts.push(
+      fittingPart({
+        id: "cerradura",
+        kind: "lock",
+        style: spec.cerradura,
+        side: lockSide,
+        from: [lockX, lockY, z],
+        to: pasador ? [lockX, 40, z] : [lockX, lockY, z],
+        length: pasador ? Math.max(lockY - 40, 80) : 120,
+        nombre: pasador ? "pasador al piso" : "cerradura de gancho",
+        w: 80,
+        d: 40,
+        t: 8,
+      }),
+    );
+  }
+
   return parts;
 }
 
@@ -485,7 +611,37 @@ function aabbOfPart(part) {
       x: part.from[0] - r,
       y: part.from[1] - r,
       w: r * 2,
-      h: r * 2,
+      h: r * 2 + 18,
+      role: part.role,
+    };
+  }
+  if (part.kind === "trolley") {
+    const w = part.style === "carrito_doble" ? 90 : 56;
+    return {
+      x: part.from[0] - w / 2,
+      y: part.from[1] - 8,
+      w,
+      h: 70,
+      role: part.role,
+    };
+  }
+  if (part.kind === "lock") {
+    const sign = part.side === "derecha" ? 1 : -1;
+    const h = part.style === "pasador" ? part.from[1] - 20 : 120;
+    return {
+      x: part.from[0] + (sign > 0 ? 0 : -90),
+      y: part.style === "pasador" ? 20 : part.from[1] - 60,
+      w: 90,
+      h,
+      role: part.role,
+    };
+  }
+  if (part.kind === "guide_roller") {
+    return {
+      x: part.from[0] - 22,
+      y: part.from[1] - 22,
+      w: 44,
+      h: 44,
       role: part.role,
     };
   }
@@ -512,7 +668,7 @@ function aabbOfPart(part) {
 }
 
 function buildViews2d(spec, parts, meta) {
-  const members = parts.filter((p) => p.kind === "tube" || p.kind === "round");
+  const members = parts.filter((p) => p.kind === "tube" || p.kind === "round" || p.kind === "angle");
   const rects = members
     .filter((p) => p.role !== "tirante")
     .map((p) => ({ ...aabbOfPart(p), id: p.id }));
@@ -520,7 +676,7 @@ function buildViews2d(spec, parts, meta) {
     .filter((p) => p.role === "tirante")
     .map((p) => ({
       id: p.id,
-      role: p.role,
+      role: p.profile.shape === "cable" ? "cable" : p.role,
       x1: p.from[0],
       y1: p.from[1],
       x2: p.to[0],
@@ -540,14 +696,18 @@ function buildViews2d(spec, parts, meta) {
       flagIn: 34,
       flagOut: 20,
     }));
-  const circles = parts
-    .filter((p) => p.kind === "wheel")
+  const fittings = parts
+    .filter((p) => ["wheel", "trolley", "lock", "guide_roller"].includes(p.kind))
     .map((p) => ({
       id: p.id,
       role: p.role,
+      kind: p.kind,
+      style: p.style,
+      side: p.side,
       cx: p.from[0],
       cy: p.from[1],
-      r: 36,
+      x2: p.to[0],
+      y2: p.to[1],
     }));
 
   const dims = [
@@ -581,7 +741,7 @@ function buildViews2d(spec, parts, meta) {
       rects,
       segments,
       hinges,
-      circles,
+      fittings,
       dims,
     },
   };

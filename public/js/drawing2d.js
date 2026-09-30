@@ -79,6 +79,117 @@ function drawHinge(ns, h) {
   return g;
 }
 
+function svgEl(ns, tag, attrs) {
+  const el = document.createElementNS(ns, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+function drawWheel2d(ns, f) {
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "herraje fitting");
+  const r = f.style === "nylon" ? 34 : 36;
+  const circle = svgEl(ns, "circle", {
+    cx: f.cx,
+    cy: f.cy,
+    r,
+    class: f.style === "nylon" ? "nylon" : "herraje",
+  });
+  g.appendChild(circle);
+  if (f.style === "canal_v") {
+    g.appendChild(svgEl(ns, "circle", { cx: f.cx, cy: f.cy, r: r * 0.45, class: "pomo" }));
+  } else if (f.style === "canal_u") {
+    g.appendChild(svgEl(ns, "circle", { cx: f.cx, cy: f.cy, r: r * 0.55, class: "pomo" }));
+  } else {
+    g.appendChild(svgEl(ns, "circle", { cx: f.cx, cy: f.cy, r: 10, class: "pomo" }));
+  }
+  const forkH = r + 16;
+  g.appendChild(svgEl(ns, "rect", {
+    x: f.cx - 16,
+    y: f.cy,
+    width: 32,
+    height: forkH,
+    class: "aleta",
+  }));
+  track(g, f.id);
+  return g;
+}
+
+function drawTrolley2d(ns, f) {
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "herraje fitting");
+  const double = f.style === "carrito_doble";
+  const r = 16;
+  const ys = f.cy + 46;
+  const xs = double ? [f.cx - 26, f.cx + 26] : [f.cx];
+  for (const x of xs) {
+    g.appendChild(svgEl(ns, "circle", { cx: x, cy: ys, r, class: "herraje" }));
+  }
+  g.appendChild(svgEl(ns, "rect", {
+    x: f.cx - (double ? 42 : 22),
+    y: f.cy - 6,
+    width: double ? 84 : 44,
+    height: 40,
+    class: "caja",
+  }));
+  track(g, f.id);
+  return g;
+}
+
+function drawLock2d(ns, f) {
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "herraje fitting");
+  const sign = f.side === "derecha" ? 1 : -1;
+  const bw = 70;
+  const bh = 110;
+  const x = sign > 0 ? f.cx : f.cx - bw;
+  g.appendChild(svgEl(ns, "rect", { x, y: f.cy - bh / 2, width: bw, height: bh, class: "caja" }));
+  if (f.style === "pasador") {
+    g.appendChild(svgEl(ns, "rect", {
+      x: f.cx + sign * 20 - 6,
+      y: 20,
+      width: 12,
+      height: f.cy - 20,
+      class: "gancho",
+    }));
+  } else {
+    const hx = sign > 0 ? f.cx + bw : f.cx - bw - 36;
+    g.appendChild(svgEl(ns, "rect", { x: hx, y: f.cy - 6, width: 36, height: 12, class: "gancho" }));
+    g.appendChild(svgEl(ns, "rect", {
+      x: sign > 0 ? hx + 24 : hx,
+      y: f.cy - 28,
+      width: 12,
+      height: 34,
+      class: "gancho",
+    }));
+  }
+  track(g, f.id);
+  return g;
+}
+
+function drawGuideRoller2d(ns, f) {
+  const g = document.createElementNS(ns, "g");
+  g.setAttribute("class", "herraje fitting");
+  g.appendChild(svgEl(ns, "circle", { cx: f.cx, cy: f.cy, r: 18, class: "herraje" }));
+  g.appendChild(svgEl(ns, "rect", {
+    x: f.cx - 16,
+    y: f.cy - 10,
+    width: 32,
+    height: 20,
+    class: "aleta",
+  }));
+  track(g, f.id);
+  return g;
+}
+
+function drawFitting(ns, f) {
+  if (f.kind === "wheel") return drawWheel2d(ns, f);
+  if (f.kind === "trolley") return drawTrolley2d(ns, f);
+  if (f.kind === "lock") return drawLock2d(ns, f);
+  if (f.kind === "guide_roller") return drawGuideRoller2d(ns, f);
+  return drawWheel2d(ns, f);
+}
+
 function idFrom(el, root) {
   let n = el;
   while (n && n !== root) {
@@ -114,10 +225,16 @@ export function draw2d(container, views2d, handlers) {
       rect.barrote { fill: #8aa0b3; }
       rect.marco, rect.travesano, rect.refuerzo { fill: #6d6458; }
       line.tirante { stroke: #6d6458; stroke-linecap: square; fill: none; }
+      line.cable { stroke: #3e4c5a; stroke-linecap: round; stroke-dasharray: 34 16; fill: none; }
       circle.herraje { fill: #d4652f; stroke: #efe6d6; stroke-width: 3; }
+      circle.nylon { fill: #e8e0d4; stroke: #efe6d6; stroke-width: 3; }
       g.herraje .cano { fill: #b8c3cc; stroke: #efe6d6; stroke-width: 3; }
       g.herraje .aleta { fill: #9aa5ae; stroke: #efe6d6; stroke-width: 3; }
       g.herraje .pomo { fill: #d4dce2; stroke: #efe6d6; stroke-width: 2; }
+      g.herraje .caja { fill: #b8c3cc; stroke: #efe6d6; stroke-width: 3; }
+      g.herraje .gancho { fill: #9aa5ae; stroke: #efe6d6; stroke-width: 3; }
+      g.fitting.is-hover > * { stroke: #d4652f; stroke-width: 8; }
+      g.fitting.is-on > * { stroke: #e8c372; stroke-width: 10; }
       .is-hover { stroke: #d4652f; }
       .is-on { stroke: #e8c372; }
       rect.is-hover, circle.is-hover, g.is-hover > * { stroke: #d4652f; stroke-width: 8; }
@@ -154,14 +271,8 @@ export function draw2d(container, views2d, handlers) {
   for (const h of front.hinges || []) {
     root.appendChild(drawHinge(ns, h));
   }
-  for (const c of front.circles || []) {
-    const circle = document.createElementNS(ns, "circle");
-    circle.setAttribute("cx", c.cx);
-    circle.setAttribute("cy", c.cy);
-    circle.setAttribute("r", c.r);
-    circle.setAttribute("class", c.role || "herraje");
-    if (c.id) track(circle, c.id);
-    root.appendChild(circle);
+  for (const f of front.fittings || []) {
+    root.appendChild(drawFitting(ns, f));
   }
   svg.appendChild(root);
   svg.addEventListener("pointermove", (event) => {

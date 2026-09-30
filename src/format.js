@@ -16,3 +16,15 @@ export function nombreCaño(w, d, t) {
 export function nombreRedondo(diam) {
   return `hierro redondo del ${diam}`;
 }
+
+export function nombrePlanchuela(w, t) {
+  return `planchuela ${w} × ${uyEspesor(t)}`;
+}
+
+export function nombreAngulo(w, d, t) {
+  return `ángulo ${w}×${d} × ${uyEspesor(t)}`;
+}
+
+export function nombreCable(diam) {
+  return `cable de acero de ${diam} mm`;
+}
