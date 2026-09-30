@@ -36,7 +36,7 @@ export const TIPOS = [
   {
     id: "porton_corredizo",
     nombre: "Portón corredizo",
-    descripcion: "Una hoja sobre riel, con ruedas y refuerzos.",
+    descripcion: "Una hoja sobre riel, con ruedas y tirantes.",
     defaults: {
       ancho: 3000,
       alto: 2000,

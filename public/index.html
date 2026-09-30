@@ -52,6 +52,7 @@
             Hierro de los barrotes
             <select name="barrote" id="barrote"></select>
           </label>
+          <div id="fotos-material" class="fotos-material"></div>
           <div class="row">
             <label>
               Luz entre barrotes (mm)
@@ -84,7 +85,52 @@
           <button type="button" class="tab is-on" data-view="3d" aria-pressed="true">Vista 3D</button>
           <button type="button" class="tab" data-view="2d" aria-pressed="false">Plano 2D</button>
         </div>
-        <div id="view-3d" class="stage"></div>
+        <aside id="pieza" class="pieza is-hidden" aria-live="polite">
+          <div class="pieza-head">
+            <strong id="pieza-titulo"></strong>
+            <button type="button" id="pieza-cerrar" class="is-hidden">Cerrar</button>
+          </div>
+          <p id="pieza-perfil"></p>
+          <p id="pieza-corte"></p>
+        </aside>
+        <div class="stage-wrap">
+          <div id="view-3d" class="stage"></div>
+          <div id="heat-legend" class="heat-legend is-hidden">
+            <span>Poco</span>
+            <div class="heat-scale" aria-hidden="true"></div>
+            <span>Más pedido</span>
+          </div>
+        </div>
+        <div id="weld-bar" class="weld-bar">
+          <div class="weld-actions">
+            <button type="button" id="mode-soldar" class="tab is-on" data-mode="soldar" aria-pressed="true">Soldadura</button>
+            <button type="button" id="mode-resist" class="tab" data-mode="resistencia" aria-pressed="false">Resistencia</button>
+          </div>
+          <div id="weld-controls" class="weld-actions">
+            <button type="button" id="weld-play">Reproducir</button>
+            <button type="button" id="weld-pause">Pausa</button>
+            <button type="button" id="weld-step">Siguiente</button>
+            <button type="button" id="weld-restart">Desde cero</button>
+            <label>
+              Velocidad
+              <select id="weld-speed">
+                <option value="lenta">Lenta</option>
+                <option value="normal" selected>Normal</option>
+                <option value="rapida">Rápida</option>
+              </select>
+            </label>
+          </div>
+          <div id="resist-controls" class="weld-actions is-hidden">
+            <button type="button" id="resist-play">Reproducir</button>
+            <button type="button" id="resist-pause">Pausa</button>
+            <button type="button" id="resist-reset">Sin carga</button>
+            <label class="resist-slider">
+              Viento
+              <input id="resist-load" type="range" min="0" max="100" value="0" />
+            </label>
+          </div>
+          <p id="weld-label" class="weld-label">Soldaduras en orden de taller</p>
+        </div>
         <div id="view-2d" class="stage is-hidden"></div>
         <p id="status" class="status">Cargando…</p>
       </section>
@@ -94,13 +140,22 @@
         <p class="aviso" id="aviso"></p>
         <div id="resumen" class="resumen"></div>
         <h3>Casa de hierros</h3>
-        <div id="cortes" class="table-wrap"></div>
+        <p class="fine">Se vende de 6 m. No pidas la reja cortada: el corte fino lo hace el taller.</p>
+        <ul id="pedido-hierros" class="pedido"></ul>
+        <details class="cortes-taller">
+          <summary>Planilla de cortes (taller)</summary>
+          <div id="cortes" class="table-wrap"></div>
+        </details>
         <h3>Electrodos</h3>
         <div id="electrodos" class="electro"></div>
         <h3>Ferretería</h3>
+        <ul id="discos" class="pedido"></ul>
         <ul id="herrajes" class="herrajes"></ul>
         <h3>Pintura</h3>
         <ul id="pintura" class="herrajes"></ul>
+
+        <h2>Paso a paso</h2>
+        <ol id="pasos" class="pasos"></ol>
 
         <h2>Consulta al taller</h2>
         <div id="chat-log" class="chat-log"></div>

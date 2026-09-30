@@ -71,10 +71,15 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1.4fr) minmax(280px, 380px);
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 0.9rem;
   padding: 0.9rem;
   align-items: start;
+}
+
+.panel.data {
+  grid-column: 1 / -1;
+  min-height: 0;
 }
 
 .panel {
@@ -158,6 +163,57 @@ button,
   margin-top: 1.4rem;
 }
 
+.panel.viewer {
+  position: relative;
+}
+
+.pieza {
+  position: absolute;
+  z-index: 2;
+  top: 3.35rem;
+  left: 1.15rem;
+  max-width: min(300px, 72%);
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, #1c1814 90%, transparent);
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.pieza.is-pinned {
+  pointer-events: auto;
+}
+
+.pieza.is-hidden,
+.pieza .is-hidden {
+  display: none;
+}
+
+.pieza-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pieza strong {
+  color: var(--accent-2);
+  font-size: 0.95rem;
+}
+
+.pieza p {
+  margin: 0.22rem 0 0;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink);
+}
+
+#pieza-cerrar {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;
@@ -186,10 +242,45 @@ button,
 
 .stage {
   height: min(62vh, 640px);
-  background: #0c0b0a;
+  background: #d6cfc4;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #2a241d;
+}
+
+.stage-wrap {
+  position: relative;
+}
+
+.heat-legend {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.45rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, #1c1814 78%, transparent);
+  color: #efe6d6;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.heat-legend.is-hidden {
+  display: none;
+}
+
+.heat-scale {
+  width: 108px;
+  height: 9px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #1e3a5f, #2b6cb0, #2f9e6b, #e8c372, #d4652f, #9b1c1c);
+}
+
+#view-2d.stage {
+  background: #0c0b0a;
 }
 
 .stage.is-hidden {
@@ -199,6 +290,52 @@ button,
 #view-2d svg {
   width: 100%;
   height: 100%;
+}
+
+.weld-bar {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.weld-bar.is-hidden {
+  display: none;
+}
+
+.weld-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.weld-actions.is-hidden {
+  display: none;
+}
+
+.weld-actions label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.weld-label {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--accent-2);
+}
+
+.resist-slider {
+  flex: 1;
+  min-width: 140px;
+}
+
+.resist-slider input {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 .status {
@@ -246,6 +383,9 @@ td {
 }
 
 .electro {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
   font-family: var(--mono);
   font-size: 0.85rem;
   background: #16120e;
@@ -255,10 +395,116 @@ td {
   margin-bottom: 0.7rem;
 }
 
+.electro img,
+.con-foto img,
+.fotos-material img {
+  width: 84px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #fff;
+  flex: none;
+}
+
+.fotos-material {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.fotos-material figure {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.fotos-material img {
+  width: 100%;
+  height: 92px;
+}
+
+.fotos-material figcaption {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.con-foto {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.4rem 0;
+}
+
 .herrajes {
   margin: 0 0 1rem;
   padding-left: 1.1rem;
   color: var(--muted);
+}
+
+.pedido {
+  margin: 0.4rem 0 0.85rem;
+  padding-left: 1.15rem;
+}
+
+.pedido li {
+  margin: 0.25rem 0;
+}
+
+.pedido strong {
+  font-family: var(--mono);
+  color: var(--ok);
+}
+
+.cortes-taller {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.cortes-taller summary {
+  cursor: pointer;
+  color: var(--accent-2);
+  margin-bottom: 0.4rem;
+}
+
+.cortes-taller .table-wrap {
+  max-height: 160px;
+  margin-bottom: 0;
+}
+
+.pasos {
+  list-style: none;
+  margin: 0 0 1.2rem;
+  padding-left: 0;
+  color: var(--ink);
+}
+
+.pasos > li {
+  margin: 0.75rem 0 1rem;
+}
+
+.pasos h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.88rem;
+}
+
+.pasos ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.pasos ul li {
+  margin: 0.28rem 0;
+}
+
+.pedido small {
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .chat-log {

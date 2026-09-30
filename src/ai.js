@@ -49,8 +49,8 @@ Diseño actual (JSON): ${JSON.stringify(spec)}
 Lista calculada (JSON): ${JSON.stringify({
     cortes: bom.cortes.map((c) => ({
       material: c.perfil,
-      metros: c.metros,
-      caños_de_6m: c.barras_6m,
+      pedir: c.pedido,
+      cortes_taller: c.detalle,
     })),
     electrodos: bom.electrodos,
     resumen: bom.resumen,

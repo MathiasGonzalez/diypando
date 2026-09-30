@@ -49,6 +49,96 @@ function addTube(parts, joints, opts) {
   });
 }
 
+function add(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
+function scale(v, s) {
+  return [v[0] * s, v[1] * s, v[2] * s];
+}
+
+function dot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function clamp01(x) {
+  return Math.min(1, Math.max(0, x));
+}
+
+function closestPointOnSegments(p1, p2, q1, q2) {
+  const u = sub(p2, p1);
+  const v = sub(q2, q1);
+  const w0 = sub(p1, q1);
+  const a = dot(u, u);
+  const b = dot(u, v);
+  const c = dot(v, v);
+  const d = dot(u, w0);
+  const e = dot(v, w0);
+  const D = a * c - b * b;
+  const EPS = 1e-6;
+  let sc;
+  let tc;
+  if (D < EPS) {
+    sc = 0;
+    tc = c > EPS ? clamp01(e / c) : 0;
+  } else {
+    sc = clamp01((b * e - c * d) / D);
+    tc = clamp01((a * e - b * d) / D);
+  }
+  const pa = add(p1, scale(u, sc));
+  const pb = add(q1, scale(v, tc));
+  return mid(pa, pb);
+}
+
+function hojaDe(id) {
+  if (/-b(?:$|-)/.test(id) || id.endsWith("-b")) return 1;
+  return 0;
+}
+
+function etapaDe(note) {
+  if (note === "esquina inferior") return 1;
+  if (note === "esquina superior") return 2;
+  if (note === "travesaño a poste") return 3;
+  if (note === "refuerzo") return 4;
+  if (note === "tirante") return 5;
+  if (note === "barrote inferior" || note === "barrote a poste") return 6;
+  if (note === "barrote superior") return 7;
+  if (note.startsWith("T ")) return 8;
+  return 9;
+}
+
+function resolveJoints(parts, joints) {
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  const resolved = [];
+  for (const joint of joints) {
+    const pa = byId.get(joint.a);
+    const pb = byId.get(joint.b);
+    if (!pa || !pb) continue;
+    const at = closestPointOnSegments(pa.from, pa.to, pb.from, pb.to);
+    const half = Math.max(14, joint.fillet_mm * 0.35);
+    const from_w = [at[0], at[1], at[2] - half];
+    const to_w = [at[0], at[1], at[2] + half];
+    resolved.push({
+      a: joint.a,
+      b: joint.b,
+      note: joint.note,
+      fillet_mm: joint.fillet_mm,
+      etapa: etapaDe(joint.note),
+      hoja: Math.max(hojaDe(joint.a), hojaDe(joint.b)),
+      at,
+      from_w,
+      to_w,
+    });
+  }
+  resolved.sort((j, k) => {
+    if (j.hoja !== k.hoja) return j.hoja - k.hoja;
+    if (j.etapa !== k.etapa) return j.etapa - k.etapa;
+    if (j.at[0] !== k.at[0]) return j.at[0] - k.at[0];
+    return j.at[1] - k.at[1];
+  });
+  return resolved.map((j, i) => ({ ...j, orden: i + 1 }));
+}
+
 function weld(joints, a, b, filletMm, note) {
   joints.push({
     a,
@@ -56,6 +146,119 @@ function weld(joints, a, b, filletMm, note) {
     fillet_mm: Math.max(8, Math.round(filletMm)),
     note,
   });
+}
+
+const PANE_MAX_MM = 1500;
+const PUERTA_TIRANTE_MM = 1200;
+const REJA_PARANTE_MM = 1600;
+
+function paneCount(width, height) {
+  const target = Math.min(height, PANE_MAX_MM);
+  return Math.max(1, Math.ceil(width / target));
+}
+
+function addTirante(parts, joints, opts) {
+  const { id, profile, from, to, weldTo, fillet } = opts;
+  addTube(parts, joints, {
+    id,
+    role: "tirante",
+    profile,
+    from,
+    to,
+    group: "marco",
+  });
+  const size = fillet || profile.w;
+  for (const other of weldTo || []) {
+    if (other) weld(joints, id, other, size, "tirante");
+  }
+}
+
+function addHingeTirante(parts, joints, spec, originX, leafW, suffix, hingeSide, mw, md, hasBottom) {
+  const marco = parsePerfil(spec.marco_perfil);
+  const z = md / 2;
+  const y0 = hasBottom ? mw : 0;
+  const y1 = spec.alto - mw;
+  const xIzq = originX + mw;
+  const xDer = originX + leafW - mw;
+  const from = hingeSide === "derecha" ? [xDer, y0, z] : [xIzq, y0, z];
+  const to = hingeSide === "derecha" ? [xIzq, y1, z] : [xDer, y1, z];
+  const weldTo = [`poste-izq${suffix}`, `poste-der${suffix}`, `travesano-sup${suffix}`];
+  if (hasBottom) weldTo.push(`umbral${suffix}`);
+  addTirante(parts, joints, {
+    id: `tirante${suffix}`,
+    profile: marco,
+    from,
+    to,
+    weldTo,
+    fillet: mw,
+  });
+}
+
+function addCorredizoArriostrado(parts, joints, spec, mw, md) {
+  const marco = parsePerfil(spec.marco_perfil);
+  const z = md / 2;
+  const n = paneCount(spec.ancho, spec.alto);
+  const paneW = spec.ancho / n;
+  const y0 = mw;
+  const y1 = spec.alto - mw;
+
+  const verticalId = (i) => {
+    if (i === 0) return "poste-izq";
+    if (i === n) return "poste-der";
+    return `refuerzo-${i}`;
+  };
+
+  for (let i = 1; i < n; i++) {
+    const id = `refuerzo-${i}`;
+    addTube(parts, joints, {
+      id,
+      role: "refuerzo",
+      profile: marco,
+      from: [paneW * i, y0, z],
+      to: [paneW * i, y1, z],
+      group: "marco",
+    });
+    weld(joints, id, "umbral", mw, "refuerzo");
+    weld(joints, id, "travesano-sup", mw, "refuerzo");
+  }
+
+  for (let i = 0; i < n; i++) {
+    const x0 = i === 0 ? mw : paneW * i;
+    const x1 = i === n - 1 ? spec.ancho - mw : paneW * (i + 1);
+    addTirante(parts, joints, {
+      id: `tirante-${i + 1}`,
+      profile: marco,
+      from: [x0, y0, z],
+      to: [x1, y1, z],
+      weldTo: ["umbral", "travesano-sup", verticalId(i), verticalId(i + 1)],
+      fillet: mw,
+    });
+  }
+
+  return { panos: n, parantes: Math.max(0, n - 1), tirantes: n };
+}
+
+function addRejaParante(parts, joints, spec, mw, md) {
+  if (spec.ancho <= REJA_PARANTE_MM) return { panos: 0, parantes: 0, tirantes: 0 };
+  const marco = parsePerfil(spec.marco_perfil);
+  const z = md / 2;
+  addTube(parts, joints, {
+    id: "refuerzo-1",
+    role: "refuerzo",
+    profile: marco,
+    from: [spec.ancho / 2, mw, z],
+    to: [spec.ancho / 2, spec.alto - mw, z],
+    group: "marco",
+  });
+  weld(joints, "refuerzo-1", "umbral", mw, "refuerzo");
+  weld(joints, "refuerzo-1", "travesano-sup", mw, "refuerzo");
+  return { panos: 0, parantes: 1, tirantes: 0 };
+}
+
+function needsHingeTirante(spec, leafW) {
+  if (spec.tipo === "porton_dos_hojas") return true;
+  if (spec.tipo === "puerta_reja_peatonal" && leafW > PUERTA_TIRANTE_MM) return true;
+  return false;
 }
 
 function leafGeometry(spec, originX, leafW, suffix, hingeSide) {
@@ -198,12 +401,16 @@ function leafGeometry(spec, originX, leafW, suffix, hingeSide) {
         kind: "hinge",
         from: [hingeX, y, z],
         to: [hingeX, y, z],
-        length: 80,
-        profile: { id: "bisagra", shape: "hinge", w: 28, d: 28, t: 4, nombre: "bisagra" },
+        length: 100,
+        profile: { id: "bisagra", shape: "hinge", w: 20, d: 20, t: 4, nombre: "bisagra de pomo" },
         group: "herrajes",
         side: hingeSide,
       });
     }
+  }
+
+  if (needsHingeTirante(spec, leafW)) {
+    addHingeTirante(parts, joints, spec, originX, leafW, suffix, hingeSide, mw, md, hasBottom);
   }
 
   return { parts, joints, actualLuz, barCount, innerW, innerH, mw, md, hasBottom };
@@ -253,8 +460,21 @@ function hardwareParts(spec, md) {
 }
 
 function aabbOfPart(part) {
-  if (part.kind === "hinge" || part.kind === "wheel") {
-    const r = part.kind === "wheel" ? 40 : 16;
+  if (part.kind === "hinge") {
+    const r = 12;
+    const flag = 34;
+    const toward = part.side === "derecha" ? -1 : 1;
+    const pinX = part.from[0] + (part.side === "derecha" ? r : -r);
+    return {
+      x: toward > 0 ? pinX - r : pinX - r - flag,
+      y: part.from[1] - 50,
+      w: r * 2 + flag,
+      h: 100,
+      role: part.role,
+    };
+  }
+  if (part.kind === "wheel") {
+    const r = 40;
     return {
       x: part.from[0] - r,
       y: part.from[1] - r,
@@ -286,9 +506,43 @@ function aabbOfPart(part) {
 }
 
 function buildViews2d(spec, parts, meta) {
-  const rects = parts
-    .filter((p) => p.kind === "tube" || p.kind === "round")
+  const members = parts.filter((p) => p.kind === "tube" || p.kind === "round");
+  const rects = members
+    .filter((p) => p.role !== "tirante")
     .map((p) => ({ ...aabbOfPart(p), id: p.id }));
+  const segments = members
+    .filter((p) => p.role === "tirante")
+    .map((p) => ({
+      id: p.id,
+      role: p.role,
+      x1: p.from[0],
+      y1: p.from[1],
+      x2: p.to[0],
+      y2: p.to[1],
+      w: p.profile.w,
+    }));
+  const hinges = parts
+    .filter((p) => p.kind === "hinge")
+    .map((p) => ({
+      id: p.id,
+      role: p.role,
+      side: p.side,
+      cx: p.from[0] + (p.side === "derecha" ? 10 : -10),
+      cy: p.from[1],
+      h: 100,
+      r: 10,
+      flagIn: 34,
+      flagOut: 20,
+    }));
+  const circles = parts
+    .filter((p) => p.kind === "wheel")
+    .map((p) => ({
+      id: p.id,
+      role: p.role,
+      cx: p.from[0],
+      cy: p.from[1],
+      r: 36,
+    }));
 
   const dims = [
     {
@@ -319,6 +573,9 @@ function buildViews2d(spec, parts, meta) {
       width: spec.ancho,
       height: spec.alto,
       rects,
+      segments,
+      hinges,
+      circles,
       dims,
     },
   };
@@ -361,35 +618,33 @@ export function buildGeometry(spec) {
     innerH = leaf.innerH;
   }
 
+  let bracing = { panos: 0, parantes: 0, tirantes: 0 };
   if (spec.tipo === "porton_corredizo") {
-    const marco = parsePerfil(spec.marco_perfil);
-    const third = spec.ancho / 3;
-    addTube(parts, joints, {
-      id: "refuerzo-1",
-      role: "refuerzo",
-      profile: marco,
-      from: [third, mw, md / 2],
-      to: [third, spec.alto - mw, md / 2],
-      group: "marco",
-    });
-    addTube(parts, joints, {
-      id: "refuerzo-2",
-      role: "refuerzo",
-      profile: marco,
-      from: [third * 2, mw, md / 2],
-      to: [third * 2, spec.alto - mw, md / 2],
-      group: "marco",
-    });
-    weld(joints, "refuerzo-1", "umbral", mw, "refuerzo");
-    weld(joints, "refuerzo-1", "travesano-sup", mw, "refuerzo");
-    weld(joints, "refuerzo-2", "umbral", mw, "refuerzo");
-    weld(joints, "refuerzo-2", "travesano-sup", mw, "refuerzo");
+    bracing = addCorredizoArriostrado(parts, joints, spec, mw, md);
     parts.push(...hardwareParts(spec, md));
+  } else if (spec.tipo === "reja_ventana") {
+    bracing = addRejaParante(parts, joints, spec, mw, md);
+  } else {
+    bracing.tirantes = parts.filter((p) => p.role === "tirante").length;
+    bracing.parantes = parts.filter((p) => p.role === "refuerzo").length;
   }
 
-  const meta = { actualLuz, barCount, mw, md, innerW, innerH, tipo: tipo.nombre };
+  const meta = {
+    actualLuz,
+    barCount,
+    mw,
+    md,
+    innerW,
+    innerH,
+    tipo: tipo.nombre,
+    arriostrado: bracing.tirantes > 0,
+    tirantes: bracing.tirantes,
+    parantes: bracing.parantes,
+    panos: bracing.panos,
+  };
   const views2d = buildViews2d(spec, parts, meta);
-  return { parts, joints, views2d, meta };
+  const posed = resolveJoints(parts, joints);
+  return { parts, joints: posed, views2d, meta };
 }
 
 export { mid };

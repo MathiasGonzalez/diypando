@@ -1,5 +1,6 @@
 import { parsePerfil, tipoById } from "./catalog.js";
 import { uyEspesor } from "./format.js";
+import { discosAmoladora } from "./pasos.js";
 
 const STEEL = 7850;
 const STOCK = 6000;
@@ -57,13 +58,13 @@ function herrajesFor(spec) {
   }
   if (tipo === "porton_dos_hojas") {
     return [
-      { item: "bisagras reforzadas", cantidad: 6, unidad: "unid." },
+      { item: "bisagras de pomo reforzadas", cantidad: 6, unidad: "unid." },
       { item: "cerradura con falleba", cantidad: 1, unidad: "unid." },
       { item: "pasadores (arriba y abajo)", cantidad: 2, unidad: "unid." },
     ];
   }
   return [
-    { item: "bisagras", cantidad: 3, unidad: "unid." },
+    { item: "bisagras de pomo", cantidad: 3, unidad: "unid." },
     { item: "cerradura de sobreponer", cantidad: 1, unidad: "unid." },
     { item: "pasador", cantidad: 1, unidad: "unid." },
   ];
@@ -109,6 +110,12 @@ export function buildBom(spec, geometry) {
       .sort((a, b) => b[0] - a[0])
       .map(([L, n]) => `${n} de ${L} mm`);
 
+    const leftoverMm = packed.length * STOCK - packed.reduce(
+      (sum, bar) => sum + bar.cuts.reduce((s, c) => s + c + KERF, 0),
+      0,
+    );
+    const unidad6m = group.perfil.shape === "round" ? "barras de 6 m" : "caños de 6 m";
+
     cortes.push({
       perfil_id: group.perfil.id,
       perfil: group.perfil.nombre,
@@ -117,6 +124,9 @@ export function buildBom(spec, geometry) {
       cantidad_piezas: group.cortes.length,
       metros: Number((totalMm / 1000).toFixed(2)),
       barras_6m: packed.length,
+      unidad_6m: unidad6m,
+      pedido: `${packed.length} ${unidad6m}`,
+      sobrante_m: Number(Math.max(0, leftoverMm / 1000).toFixed(2)),
       peso_kg: Number(kg.toFixed(2)),
       pintura_m2: Number(paint.toFixed(2)),
       detalle,
@@ -153,6 +163,7 @@ export function buildBom(spec, geometry) {
     tipo: tipoById(spec.tipo).nombre,
     cortes,
     herrajes: herrajesFor(spec),
+    discos: discosAmoladora(cortes.reduce((s, c) => s + c.cantidad_piezas, 0)),
     pintura: [
       { item: "antióxido para hierro", cantidad: pintura_m2_n, unidad: "m²" },
       { item: "esmalte sintético", cantidad: pintura_m2_n, unidad: "m²" },
@@ -166,6 +177,27 @@ export function buildBom(spec, geometry) {
       metros_lineales: Number(metros_lineales.toFixed(2)),
       juntas_soldadura: joints.length,
     },
-    aviso: "Lista para pedir en casa de hierros y ferretería. Controlá el vano en obra (plomo y holgura).",
+    aviso: avisoFor(spec, meta),
   };
+}
+
+function avisoFor(spec, meta) {
+  const base =
+    "En casa de hierros pedí de 6 m. Los cortes los hacés vos en el taller (amoladora). Controlá el vano en obra.";
+  if (spec.tipo === "porton_corredizo") {
+    return `${base} El marco largo se descuadra si queda rectangular. Lleva tirante de caño en cada paño, de la esquina de abajo a la izquierda a la de arriba a la derecha, para que no baje una punta.`;
+  }
+  if (spec.tipo === "porton_dos_hojas") {
+    return `${base} Cada hoja lleva un tirante de caño: de la esquina de abajo del lado de la bisagra a la de arriba del encuentro. Cerrado se ve como una V, así no baja el picaporte.`;
+  }
+  if (spec.tipo === "reja_ventana") {
+    const extra = meta.parantes
+      ? " Un palo de pie al medio para que el bastidor no fleche entre los tarugos."
+      : "";
+    return `${base} Esta reja va anclada al vano: no necesita tirante.${extra}`;
+  }
+  if (meta.arriostrado) {
+    return `${base} Hoja ancha: tirante de caño de la esquina de abajo (lado bisagra) a la de arriba (lado libre), para que no baje el picaporte.`;
+  }
+  return `${base} Hoja angosta: con tres bisagras el marco no necesita tirante.`;
 }

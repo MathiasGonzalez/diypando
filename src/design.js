@@ -1,11 +1,13 @@
 import { validateSpec } from "./catalog.js";
 import { buildGeometry } from "./geometry.js";
 import { buildBom } from "./bom.js";
+import { buildPasos } from "./pasos.js";
 
 export function runDesign(inputSpec) {
   const spec = validateSpec(inputSpec);
   const geometry = buildGeometry(spec);
   const bom = buildBom(spec, geometry);
+  const pasos = buildPasos(spec, geometry, bom);
   return {
     spec,
     parts: geometry.parts,
@@ -13,5 +15,6 @@ export function runDesign(inputSpec) {
     views2d: geometry.views2d,
     meta: geometry.meta,
     bom,
+    pasos,
   };
 }
