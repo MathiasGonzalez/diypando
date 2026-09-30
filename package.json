@@ -1,0 +1,12 @@
+{
+  "name": "diypando",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "wrangler check"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

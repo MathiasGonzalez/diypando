@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DIY Pando — puertas y rejas</title>
+    <link rel="stylesheet" href="/css/app.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark">DIY</span>
+        <h1>Pando</h1>
+        <p>Armado de puertas y rejas</p>
+      </div>
+      <p class="hint">Medidas en milímetros. Lo que ves y lo que vas a pedir salen del mismo cálculo.</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls" aria-label="Tipo y medidas">
+        <h2>Para hacer</h2>
+        <div id="tipos" class="tipos"></div>
+
+        <form id="form" class="form">
+          <label>
+            Estilo
+            <select name="estilo" id="estilo"></select>
+          </label>
+          <div class="row">
+            <label>
+              Ancho (mm)
+              <input name="ancho" id="ancho" type="number" step="10" min="400" max="6000" />
+            </label>
+            <label>
+              Alto (mm)
+              <input name="alto" id="alto" type="number" step="10" min="400" max="3000" />
+            </label>
+          </div>
+          <label>
+            Caño del marco
+            <select name="marco_perfil" id="marco_perfil"></select>
+          </label>
+          <label>
+            Hierro de los barrotes
+            <select name="barrote" id="barrote"></select>
+          </label>
+          <div class="row">
+            <label>
+              Luz entre barrotes (mm)
+              <input name="luz_mm" id="luz_mm" type="number" step="5" min="60" max="180" />
+            </label>
+            <label>
+              Travesaños
+              <input name="travesanos" id="travesanos" type="number" min="0" max="4" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Mano
+              <select name="lado_bisagra" id="lado_bisagra">
+                <option value="izquierda">Mano izquierda</option>
+                <option value="derecha">Mano derecha</option>
+                <option value="exterior">Afuera (dos hojas)</option>
+              </select>
+            </label>
+            <label class="check">
+              <input name="incluir_umbral" id="incluir_umbral" type="checkbox" />
+              Travesaño de abajo
+            </label>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel viewer" aria-label="Diagramas">
+        <div class="tabs">
+          <button type="button" class="tab is-on" data-view="3d" aria-pressed="true">Vista 3D</button>
+          <button type="button" class="tab" data-view="2d" aria-pressed="false">Plano 2D</button>
+        </div>
+        <div id="view-3d" class="stage"></div>
+        <div id="view-2d" class="stage is-hidden"></div>
+        <p id="status" class="status">Cargando…</p>
+      </section>
+
+      <section class="panel data" aria-label="Lista para pedir y consulta">
+        <h2>Para pedir</h2>
+        <p class="aviso" id="aviso"></p>
+        <div id="resumen" class="resumen"></div>
+        <h3>Casa de hierros</h3>
+        <div id="cortes" class="table-wrap"></div>
+        <h3>Electrodos</h3>
+        <div id="electrodos" class="electro"></div>
+        <h3>Ferretería</h3>
+        <ul id="herrajes" class="herrajes"></ul>
+        <h3>Pintura</h3>
+        <ul id="pintura" class="herrajes"></ul>
+
+        <h2>Consulta al taller</h2>
+        <div id="chat-log" class="chat-log"></div>
+        <form id="chat-form" class="chat-form">
+          <input
+            id="chat-input"
+            type="text"
+            maxlength="500"
+            placeholder="Ej: pasala a redondo del 12 y luz de 10 cm"
+            autocomplete="off"
+          />
+          <button type="submit">Enviar</button>
+        </form>
+        <p class="fine" id="chat-source"></p>
+      </section>
+    </main>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
